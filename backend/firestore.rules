@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Public read for published events, tickets, concerts & packages
+    match /events/{eventId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+      
+      match /ticketTypes/{ticketTypeId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+      
+      match /seats/{seatId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+    
+    match /concerts/{concertId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /premiumPackages/{packageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Reservations can only be manipulated by authenticated user or server
+    match /reservations/{reservationId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Orders: only the customer who placed the order or staff can read
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.customerId == request.auth.uid || isAdmin());
+      allow write: if false; // Only server-side PHP API creates and updates orders!
+    }
+    
+    // Tickets: read only by owner or staff
+    match /tickets/{ticketId} {
+      allow read: if isAuthenticated() && (resource.data.customerId == request.auth.uid || isAdmin());
+      allow write: if false; // Server authoritative only
+    }
+    
+    // Audit logs & email jobs are strictly server-only
+    match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    
+    match /emailJobs/{jobId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        try {
+          var _orig = window.fetch;
+          var _current = _orig;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function() { return _current || _orig; },
+            set: function(fn) { _current = fn; }
+          });
+        } catch (e) {
+          try {
+            var _protoOrig = Window.prototype.fetch;
+            var _protoCurrent = _protoOrig;
+            Object.defineProperty(Window.prototype, 'fetch', {
+              configurable: true,
+              enumerable: true,
+              get: function() { return _protoCurrent || _protoOrig; },
+              set: function(fn) { _protoCurrent = fn; }
+            });
+          } catch (e2) {}
+        }
+      })();
+    </script>
+    <title>Mastrotickets | Formula 1 Abu Dhabi Grand Prix 2026 Tickets & Hospitality</title>
+    <meta name="description" content="Official tickets for the Formula 1 Etihad Airways Abu Dhabi Grand Prix 2026 at Yas Marina Circuit. Covered grandstands, Paddock Club™, Yasalam concerts, and Yas Island theme parks." />
+    <meta property="og:title" content="Mastrotickets | Formula 1 Abu Dhabi Grand Prix 2026 Tickets & Hospitality" />
+    <meta property="og:description" content="Official tickets for the Formula 1 Etihad Airways Abu Dhabi Grand Prix 2026 at Yas Marina Circuit. Covered grandstands, Paddock Club™, Yasalam concerts, and Yas Island theme parks." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="/assets/aistudio/mastro-logo_504ab54e.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@0,700;0,800;0,900;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#F5F7FA] text-[#111827] min-h-screen antialiased selection:bg-[#123B67] selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,6 @@
+{
+  "name": "Mastrotickets",
+  "description": "Premium Formula 1 Grand Prix ticketing marketplace, grandstand reservations, concerts, and paddock hospitality.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

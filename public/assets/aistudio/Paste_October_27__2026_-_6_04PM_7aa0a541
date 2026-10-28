@@ -1,0 +1,1064 @@
+# MASTROTICKETS
+## Product Requirements Document (PRD)
+**AI Studio Implementation Specification — Version 1.0**
+
+**Product:** Mastrotickets  
+**Business:** Hungary-based ticket sales platform  
+**Primary market:** Formula 1 Grand Prix ticket buyers  
+**Platform:** Responsive web application  
+**Build environment:** Google AI Studio  
+**Frontend:** React, TypeScript  
+**Backend:** PHP REST API  
+**Database:** Firebase Cloud Firestore  
+**Authentication:** Firebase Authentication  
+**Payments:** Stripe  
+**Transactional email:** Resend  
+**Media:** Cloudinary  
+**Admin dashboard:** `/admin-panel/home`
+
+---
+
+# 1. Product Vision
+
+Mastrotickets is a premium Formula 1 ticketing marketplace where customers discover Grand Prix events, compare ticket prices, choose race days and seating categories, purchase authorized tickets, and manage their bookings.
+
+The platform must combine two design influences:
+
+1. **Ticketmaster-inspired commerce UX:** A polished dark ticket marketplace with structured event listings, prominent ticket prices, filtering, ticket selection, quantity controls, checkout summaries, and customer account management.
+2. **Formula 1-inspired visual identity:** Cinematic motorsport imagery, dramatic circuit photography, racing-red accents, bold typography, Grand Prix event branding, premium hospitality experiences and editorial racing content.
+
+The result must feel like a professional, production-oriented ticketing business, not a generic event website, template marketplace, or static UI demonstration.
+
+## 1.1 Mandatory requirements
+
+- Dark theme throughout the primary customer experience.
+- Formula 1 theme throughout the storefront.
+- Ticketmaster-inspired ticket discovery, event cards and purchase flow.
+- Separate event and ticket detail pages.
+- Multiple ticket days and ticket categories per order.
+- General admission, grandstand, weekend bundles, concerts and premium hospitality categories.
+- Seat selection where supported by the inventory provider.
+- Fully functional customer account and order history.
+- Secure Stripe payments with server-side verification.
+- PHP backend connected to Firestore.
+- Automated booking and ticket-delivery emails using Resend.
+- Cloudinary image management.
+- Comprehensive admin dashboard at `/admin-panel/home`.
+- Responsive desktop, tablet and mobile layouts.
+- No fake payment confirmations, fabricated inventory or nonfunctional primary buttons.
+
+# 2. Design System — Mandatory
+
+## 2.1 Visual direction
+
+Use the supplied reference images as visual direction: the cinematic Formula 1 homepage for the storefront and the clean, structured commerce layout for ticket purchasing.
+
+The customer experience should have the visual polish of Ticketmaster's ticket marketplace, adapted into a dark Formula 1 environment.
+
+Do not use a white-background default theme for the primary interface. Do not produce a generic SaaS dashboard for the public storefront.
+
+## 2.2 Brand palette
+
+| Design token | Value | Purpose |
+|---|---|---|
+| Background | `#0B0B10` | Main page background |
+| Secondary background | `#121218` | Panels and content sections |
+| Card background | `#19191F` | Event cards and ticket panels |
+| Elevated surface | `#222229` | Inputs, dropdowns and hover states |
+| Primary accent | `#E10600` | Racing-red branding and primary actions |
+| Secondary accent | `#FF3434` | Highlights and interactive states |
+| Primary text | `#FFFFFF` | Headings and important information |
+| Secondary text | `#B4B4BE` | Descriptions and metadata |
+| Muted text | `#858591` | Secondary metadata |
+| Border | `#303039` | Dividers and card outlines |
+| Success | `#36C98F` | Confirmed bookings and availability |
+| Warning | `#F5B942` | Low inventory and pending actions |
+| Error | `#FF5B62` | Failed payments and errors |
+
+Use colors consistently through reusable design tokens. Avoid excessive gradients, glow effects, rounded floating cards everywhere, or decorative elements that reduce the premium feel.
+
+## 2.3 Typography
+
+Use a modern, bold, highly legible sans-serif typeface.
+
+Recommended typography:
+- Headings: Space Grotesk or a comparable modern display sans-serif.
+- Body: Inter.
+- Price and numerical displays: a highly legible sans-serif with consistent numerical alignment.
+
+Large headings should feel editorial and motorsport-oriented. Ticket prices, race dates and session labels must be easy to scan.
+
+## 2.4 Layout requirements
+
+- Center the primary content within a responsive maximum-width container.
+- Use a compact, sticky header on desktop.
+- Provide a collapsible mobile navigation.
+- Use high-quality event photography with dark overlays when necessary.
+- Use structured grids for ticket and event listings.
+- Keep ticket prices, availability and primary booking actions visually prominent.
+- Use subtle borders and restrained shadows.
+- Ensure focus states, keyboard navigation and readable contrast.
+- Provide skeleton loaders, empty states, error states and retry actions.
+
+## 2.5 Header and navigation
+
+Desktop navigation:
+
+- Mastrotickets logo.
+- Grand Prix.
+- Race Calendar.
+- Concerts.
+- Premium Experiences.
+- Search.
+- Help.
+- Account / Sign In.
+- Shopping cart with item count.
+
+Mobile navigation must retain the essential functions, including account access and cart access.
+
+## 2.6 Reference fidelity
+
+Recreate the overall quality and information hierarchy of a major ticket marketplace: searchable event discovery, structured listings, clearly separated ticket types, transparent pricing and a frictionless checkout.
+
+Do not copy Ticketmaster's proprietary logo, source code, branded assets or exact protected page artwork. Build a distinctive Mastrotickets design using the same broad commerce conventions and the mandatory Formula 1 aesthetic.
+
+# 3. User Roles
+
+### 3.1 Guest
+
+Can:
+- Browse events and ticket categories.
+- Search and filter events.
+- View event details, ticket conditions and prices.
+- Add tickets to a cart.
+- Register or sign in during checkout.
+- Review public policies and help information.
+
+### 3.2 Registered customer
+
+Can:
+- Manage their profile and contact details.
+- Save cart items where supported.
+- Complete purchases.
+- View orders and payment statuses.
+- Download available invoices and receipts.
+- Access authorized ticket delivery instructions.
+- Request permitted cancellations or support.
+- Receive transactional emails.
+
+### 3.3 Support agent
+
+Can:
+- Search customer accounts and orders.
+- Inspect payment and ticket-delivery statuses.
+- Resend permitted emails.
+- Create support notes.
+- Escalate refund or order modification requests.
+
+Support staff must not be allowed to change payment records or grant themselves administrative privileges.
+
+### 3.4 Inventory manager
+
+Can:
+- Create and update events.
+- Manage ticket categories, prices and sales periods.
+- Update inventory where authorized.
+- Configure seating categories and availability.
+- Manage concert and premium ticket products.
+
+### 3.5 Administrator
+
+Can:
+- Manage users and roles.
+- Manage events, tickets, prices and inventory.
+- Inspect orders, payments and refunds.
+- Configure permitted promotions.
+- Manage email templates and marketing campaigns.
+- View reports and audit logs.
+- Manage system configuration and integrations.
+
+Sensitive actions must require appropriate permissions and must be recorded in an audit log.
+
+# 4. Public Website Requirements
+
+## 4.1 Homepage — `/`
+
+The homepage is the main conversion page.
+
+### Section A: Cinematic hero
+
+Display:
+- Large Formula 1 race photography or licensed video.
+- Dark image overlay.
+- Mastrotickets branding.
+- Main headline: “YOUR NEXT GRAND PRIX STARTS HERE.”
+- Supporting copy describing race tickets and premium experiences.
+- Primary CTA: “Explore Race Tickets.”
+- Secondary CTA: “Discover Premium Experiences.”
+- Search by Grand Prix, country or circuit.
+
+The hero must be responsive and must not delay access to the event listings.
+
+### Section B: Featured Grand Prix
+
+Display prominent event cards with:
+- Race name.
+- Country and circuit.
+- Event dates.
+- Event image.
+- Starting price and currency.
+- Ticket availability status.
+- CTA: “View Tickets.”
+
+Use real event data from Firestore. Events must be published and available before they appear as bookable.
+
+### Section C: Choose your race day
+
+Provide a horizontal ticket-day selector or structured grid:
+
+- Thursday.
+- Friday.
+- Saturday.
+- Sunday.
+- Full Weekend.
+- Multi-day packages.
+
+Not all events offer tickets for every day. The interface must display only the days and sessions configured for that event.
+
+### Section D: Premium experiences
+
+Feature:
+- Authorized paddock access packages.
+- Hospitality suites.
+- Premium grandstands.
+- VIP experiences.
+- Other authorized premium inventory.
+
+Never promise pit-lane access, driver meetings, paddock access or other restricted benefits unless the selected package explicitly includes them.
+
+### Section E: After-race concerts
+
+Show:
+- Concert name.
+- Artist or lineup, where confirmed.
+- Event date and location.
+- Entry conditions.
+- Standalone concert ticket price.
+- Option to add a concert to an eligible race booking.
+
+### Section F: Why Mastrotickets
+
+Communicate genuine platform benefits such as transparent pricing, secure payment processing, booking support and clear delivery instructions. Display guarantees only when the business can substantiate them.
+
+### Section G: Race calendar
+
+Display upcoming events with date filters, location filters and ticket availability.
+
+### Section H: Footer
+
+Include:
+- About Mastrotickets.
+- Contact and support.
+- Booking help.
+- Ticket delivery information.
+- Refund and cancellation policies.
+- Terms and conditions.
+- Privacy policy.
+- Cookie preferences.
+- Company legal details.
+- Social media links.
+
+# 5. Event Discovery and Search
+
+## 5.1 Race listing — `/races`
+
+Provide a professional event directory with:
+- Search by race, country, city or circuit.
+- Date filters.
+- Country filters.
+- Ticket availability filters.
+- Price range filters.
+- Premium-experience filter.
+- Sorting by date, price and featured status.
+
+Each event card must display the relevant event image, date, location, starting price, currency and availability.
+
+Search must use actual event records, not hardcoded results.
+
+## 5.2 Event detail — `/races/[slug]`
+
+Each event must have a dedicated page containing:
+
+1. Hero image and event title.
+2. Circuit location and event dates.
+3. Event schedule with timezone.
+4. Day-by-day ticket selection.
+5. Ticket categories and prices.
+6. Seating selection where supported.
+7. Concerts and premium add-ons.
+8. Ticket conditions and restrictions.
+9. Delivery method and expected delivery information.
+10. Taxes, fees and checkout disclosures.
+11. FAQs and support information.
+12. Related events.
+
+The event page must remain usable on narrow mobile screens.
+
+# 6. Ticket Selection and Cart
+
+## 6.1 Ticket types
+
+Support configurable ticket products:
+
+- General Admission.
+- Grandstand.
+- Assigned Seat.
+- Thursday Admission.
+- Friday Admission.
+- Saturday Admission.
+- Sunday Admission.
+- Full Weekend Pass.
+- Multi-day Package.
+- After-Race Concert.
+- Paddock / Hospitality.
+- Parking and other authorized add-ons.
+
+Ticket types are configurable products, not fixed assumptions. Administrators must be able to create new categories without modifying frontend source code.
+
+## 6.2 Day selection
+
+Customers must be able to:
+- Select an individual day.
+- Select several different days.
+- Select a full-weekend package.
+- Add tickets for multiple attendees.
+- Add a concert or premium upgrade where compatible.
+- Remove individual items.
+- Update quantities.
+- Review all selections before checkout.
+
+The system must prevent incompatible combinations and explain when an add-on requires a specific race ticket.
+
+## 6.3 Seat map
+
+Where assigned seating is available, provide an interactive seat-selection experience with:
+
+- Circuit or venue seating map.
+- Grandstand or section selection.
+- Row and seat selection.
+- Seat availability states.
+- Selected-seat highlighting.
+- Price categories.
+- Accessible seating information where supplied.
+- A summary of selected seats and prices.
+
+The map must use authoritative inventory data. If the supplier does not expose seat-level inventory, provide a category-based selection interface instead of inventing specific seats.
+
+Seat reservations must expire according to a configurable server-side policy.
+
+## 6.4 Cart
+
+Route: `/cart`
+
+Display:
+- Event name.
+- Event dates.
+- Selected ticket day.
+- Ticket category.
+- Seat details, if applicable.
+- Quantity.
+- Unit price.
+- Fees and taxes where calculable.
+- Add-ons.
+- Item subtotal.
+- Order total.
+- Removal and quantity controls.
+- Continue shopping.
+- Proceed to checkout.
+
+A cart must never guarantee availability until the server has established an appropriate reservation.
+
+## 6.5 Checkout
+
+Route: `/checkout`
+
+Steps:
+
+1. Sign in or register, or use guest checkout if enabled.
+2. Enter billing details.
+3. Enter attendee information when required.
+4. Confirm ticket selections.
+5. Display itemized prices, fees, taxes and currency.
+6. Accept applicable terms and acknowledge ticket conditions.
+7. Complete payment through Stripe.
+8. Display the confirmed order page only after the backend has verified payment.
+
+Preserve cart information through authentication and recover gracefully from failed or abandoned payment sessions.
+
+# 7. Customer Accounts
+
+Routes:
+- `/login`
+- `/register`
+- `/forgot-password`
+- `/account`
+- `/account/orders`
+- `/account/orders/[orderId]`
+- `/account/tickets`
+- `/account/invoices`
+- `/account/profile`
+
+Use Firebase Authentication for identity management.
+
+Features:
+- Email/password registration and login.
+- Email verification.
+- Password recovery.
+- Secure session handling.
+- Profile management.
+- Order history.
+- Ticket delivery status.
+- Payment and refund history.
+- Invoice and receipt access.
+- Resend-confirmation request.
+- Support contact.
+
+Only the authenticated customer or an appropriately authorized staff member can access private order details.
+
+# 8. Booking, Orders and Tickets
+
+## 8.1 Order lifecycle
+
+Recommended states:
+
+- `draft`
+- `pending_payment`
+- `paid`
+- `confirmed`
+- `partially_refunded`
+- `refunded`
+- `cancelled`
+- `payment_failed`
+- `expired`
+
+Use explicit, validated state transitions. Do not allow arbitrary status changes from the frontend.
+
+## 8.2 Ticket lifecycle
+
+Recommended states:
+
+- `reserved`
+- `issued`
+- `delivery_pending`
+- `delivered`
+- `transferred`
+- `cancelled`
+- `refunded`
+- `void`
+
+Ticket state must be reconciled with the authorized supplier when tickets originate from an external provider.
+
+## 8.3 Ticket delivery
+
+After confirmed payment:
+- Generate an internal booking reference.
+- Record each ticket or supplier ticket reference.
+- Send a booking confirmation.
+- Send the invoice or receipt as applicable.
+- Send authorized ticket files, transfer links or official delivery instructions.
+- Update delivery status.
+- Record email delivery events.
+- Provide a resend option to authorized users.
+
+Do not fabricate official QR codes, ticket barcodes or mobile passes. Integrate with authorized ticketing systems and follow their transfer rules.
+
+# 9. Payment Integration — Stripe
+
+The backend must use the official Stripe PHP SDK.
+
+Required capabilities:
+- Create checkout sessions.
+- Calculate amounts on the server.
+- Record Stripe session and payment intent IDs.
+- Verify webhook signatures.
+- Handle successful payments.
+- Handle failed and expired sessions.
+- Handle refunds.
+- Support idempotent event processing.
+- Reconcile payments with orders.
+- Maintain transaction histories.
+
+## Payment security
+
+- Never trust prices or totals submitted by the browser.
+- Never expose secret keys to the frontend.
+- Never confirm an order solely because the customer returns to a success URL.
+- Never issue duplicate tickets for duplicate webhook deliveries.
+- Do not store payment-card numbers or security codes.
+- Do not mark a refund successful until its status is verified.
+- Ensure inventory reservation and release logic is reliable.
+
+Use Stripe test mode during development. Live payment processing must remain disabled until account verification, legal readiness and end-to-end testing are complete.
+
+# 10. Backend Architecture — PHP
+
+The PHP backend is the trusted layer for all business-critical operations.
+
+Suggested project structure:
+
+```text
+backend/
+├── public/
+│   └── index.php
+├── routes/
+│   ├── auth.php
+│   ├── events.php
+│   ├── tickets.php
+│   ├── reservations.php
+│   ├── orders.php
+│   ├── payments.php
+│   ├── webhooks.php
+│   ├── customers.php
+│   ├── invoices.php
+│   ├── emails.php
+│   └── admin.php
+├── src/
+│   ├── Controllers/
+│   ├── Services/
+│   ├── Repositories/
+│   ├── Middleware/
+│   ├── Validators/
+│   ├── Policies/
+│   └── Support/
+├── config/
+├── storage/
+│   └── logs/
+├── tests/
+├── composer.json
+└── .env.example
+```
+
+Use a maintained PHP framework or a well-structured REST implementation. If Laravel is selected, use its routing, validation, middleware and testing facilities rather than recreating them unnecessarily.
+
+All service credentials must be supplied through secure server-side environment configuration or a managed secret store.
+
+# 11. Firestore Data Model
+
+Use Cloud Firestore as the main application database.
+
+Suggested collections:
+
+```text
+users/{userId}
+roles/{roleId}
+events/{eventId}
+events/{eventId}/ticketTypes/{ticketTypeId}
+events/{eventId}/seats/{seatId}
+concerts/{concertId}
+premiumPackages/{packageId}
+reservations/{reservationId}
+orders/{orderId}
+payments/{paymentId}
+tickets/{ticketId}
+invoices/{invoiceId}
+refunds/{refundId}
+discounts/{discountId}
+emailJobs/{jobId}
+emailEvents/{emailEventId}
+marketingCampaigns/{campaignId}
+suppliers/{supplierId}
+adminAuditLogs/{logId}
+systemSettings/{settingId}
+```
+
+Important data fields include:
+
+**Events:** name, slug, circuit, country, timezone, dates, banner, description, status, supplier reference.
+
+**Ticket types:** event ID, category, race day, currency, price, fees, capacity, available quantity, sales window, delivery type, status.
+
+**Orders:** customer ID, items, billing details, subtotal, fees, taxes, total, currency, status, timestamps.
+
+**Payments:** order ID, Stripe session ID, payment intent ID, amount, currency, payment status, refund references.
+
+**Tickets:** order ID, customer ID, event ID, ticket type, supplier ticket reference, delivery status, transfer status.
+
+**Reservations:** order ID, items, quantity, seat references, expiration time, status.
+
+Use Firestore transactions for inventory mutations. Avoid assuming that a client-side counter or cached availability value represents the actual remaining inventory.
+
+# 12. Authentication and Authorization
+
+Firebase Authentication identifies customers and staff.
+
+The PHP backend must:
+1. Receive the Firebase ID token.
+2. Verify the token's signature, issuer, audience and expiry using a maintained library.
+3. Establish the authenticated identity.
+4. Retrieve or validate the current authorization context.
+5. Check the required permission for the requested operation.
+6. Validate and execute the request.
+7. Return only the data the caller is authorized to access.
+
+Admin access must not be granted merely because a client submits `role: "admin"`.
+
+Use Firestore security rules to prevent unauthorized direct access from browser clients. The server-side Firestore SDK may operate with privileged credentials, so the PHP application must enforce authorization itself.
+
+# 13. Email Integration — Resend
+
+Required transactional templates:
+
+- Account verification.
+- Password recovery, where implemented through the supported authentication flow.
+- Order confirmation.
+- Payment confirmation.
+- Invoice or receipt notification.
+- Ticket delivery instructions.
+- Ticket transfer instructions.
+- Payment failure.
+- Refund confirmation.
+- Cancellation notification.
+- Event update.
+- Customer support response.
+
+Admin email functions:
+- Search order and recipient.
+- Preview email.
+- Resend an existing transactional message.
+- View delivery status.
+- View permitted bounce or failure information.
+- Retry failed delivery jobs.
+- Inspect email logs.
+
+Email sending must use a durable job or retry mechanism. A transient email failure must not create a second ticket or reverse a confirmed payment.
+
+Marketing emails require appropriate consent and unsubscribe handling. Transactional and promotional messages must be treated separately.
+
+# 14. Cloudinary Integration
+
+Use Cloudinary for:
+- Grand Prix banners.
+- Circuit photographs.
+- Concert artwork.
+- Premium experience imagery.
+- Optional promotional graphics.
+
+Required features:
+- Upload through an authorized backend workflow or securely configured signed upload flow.
+- Store asset IDs and URLs in Firestore.
+- Generate optimized responsive image URLs.
+- Support alternate image sizes and formats.
+- Validate file types and file sizes.
+- Restrict uploads to authorized staff.
+- Support replacing and removing obsolete assets.
+- Use appropriate fallback images when an asset is unavailable.
+
+Never expose Cloudinary API secrets in frontend code.
+
+# 15. Admin Panel — `/admin-panel/home`
+
+The admin interface must use the same dark design system with a functional operational layout.
+
+## 15.1 Layout
+
+- Fixed or collapsible sidebar.
+- Top navigation with search and staff profile.
+- Main content area.
+- Breadcrumb navigation.
+- Responsive tables and filters.
+- Status badges.
+- Confirmation dialogs for destructive operations.
+- Notifications for successful or failed actions.
+
+## 15.2 Dashboard
+
+Display:
+- Total orders.
+- Gross sales.
+- Net revenue where calculable.
+- Tickets sold.
+- Inventory remaining.
+- Upcoming events.
+- Pending payments.
+- Refunds.
+- Failed ticket deliveries.
+- Recent orders.
+- Sales by event.
+- Sales by ticket category.
+
+All metrics must come from real database queries or explicitly labeled development fixtures.
+
+## 15.3 Event management
+
+Authorized staff can:
+- Create events.
+- Edit event details.
+- Upload banners.
+- Configure dates and timezone.
+- Configure schedules.
+- Publish and unpublish events.
+- Manage ticket sales windows.
+- Associate concerts and premium packages.
+- Archive events without destroying historical order records.
+
+## 15.4 Ticket management
+
+Authorized staff can:
+- Create and edit ticket categories.
+- Set prices and currencies.
+- Configure day access.
+- Configure seat categories.
+- Configure inventory quantities.
+- Configure package eligibility.
+- Manage sales periods.
+- Activate or deactivate ticket listings.
+- View reserved, sold and available inventory.
+
+Any operation affecting already-sold tickets must follow an explicit, audited policy.
+
+## 15.5 Orders and transactions
+
+The admin panel must provide:
+- Search by order number, customer email and payment reference.
+- Filters by date, event, order status and payment status.
+- Order detail view.
+- Line-item details.
+- Payment and webhook history.
+- Ticket delivery status.
+- Invoice and receipt access.
+- Permitted refund operations.
+- Email resend action.
+- Customer support notes.
+- Export of authorized reports.
+
+## 15.6 Customers and users
+
+Include:
+- Customer directory.
+- Customer profile.
+- Booking history.
+- Account status.
+- Contact details.
+- Support history.
+- Staff directory.
+- Role and permission management.
+
+Sensitive personal information must be restricted by role and handled according to applicable privacy requirements.
+
+## 15.7 Marketing
+
+Provide:
+- Discount code creation.
+- Start and end dates.
+- Usage limits.
+- Eligible events and ticket types.
+- Minimum order requirements.
+- Abandoned-cart email workflows, where consent and tracking rules permit.
+- Event announcement campaigns.
+- Email template management.
+- Campaign delivery statistics.
+- Unsubscribe and suppression handling.
+
+All discounts must be validated and calculated on the server.
+
+## 15.8 Audit logs
+
+Record:
+- Actor ID.
+- Action.
+- Target record.
+- Timestamp.
+- Relevant change summary.
+- Request or correlation ID where available.
+
+Audit event examples include price changes, inventory updates, refunds, permission changes, order cancellations and event publication.
+
+Do not log passwords, API secrets, card data or unnecessary personal information.
+
+# 16. API Requirements
+
+Implement versioned JSON REST endpoints. The following is the required initial API surface; the exact route implementation may vary.
+
+### Public API
+
+```text
+GET    /api/v1/events
+GET    /api/v1/events/{slug}
+GET    /api/v1/events/{eventId}/tickets
+GET    /api/v1/events/{eventId}/availability
+GET    /api/v1/concerts
+GET    /api/v1/premium-packages
+```
+
+### Customer API
+
+```text
+GET    /api/v1/me
+PATCH  /api/v1/me
+POST   /api/v1/reservations
+GET    /api/v1/reservations/{id}
+DELETE /api/v1/reservations/{id}
+POST   /api/v1/checkout/session
+GET    /api/v1/orders
+GET    /api/v1/orders/{id}
+GET    /api/v1/orders/{id}/tickets
+GET    /api/v1/orders/{id}/invoice
+POST   /api/v1/orders/{id}/resend-confirmation
+```
+
+### Payment API
+
+```text
+POST   /api/v1/webhooks/stripe
+GET    /api/v1/payments/{id}
+POST   /api/v1/orders/{id}/refund-request
+```
+
+### Admin API
+
+```text
+GET    /api/v1/admin/dashboard
+GET    /api/v1/admin/events
+POST   /api/v1/admin/events
+PATCH  /api/v1/admin/events/{id}
+POST   /api/v1/admin/ticket-types
+PATCH  /api/v1/admin/ticket-types/{id}
+GET    /api/v1/admin/orders
+GET    /api/v1/admin/orders/{id}
+GET    /api/v1/admin/payments
+POST   /api/v1/admin/orders/{id}/refund
+GET    /api/v1/admin/customers
+GET    /api/v1/admin/email-jobs
+POST   /api/v1/admin/email-jobs/{id}/retry
+GET    /api/v1/admin/audit-logs
+```
+
+Apply authorization and validation to all protected endpoints. Return consistent error objects and suitable HTTP status codes. Never expose internal stack traces or privileged data in API responses.
+
+# 17. Business Rules
+
+1. Event data and prices are managed through authorized administration or approved suppliers.
+2. Prices are stored and processed using a consistent currency and integer minor units where supported.
+3. A multi-day booking contains distinct ticket line items unless an actual bundled product is selected.
+4. A concert ticket may be standalone or linked to a qualifying race ticket.
+5. Ticket availability is verified on the server.
+6. Reservations expire and release inventory according to an explicit policy.
+7. Stripe webhooks are signature-verified and idempotent.
+8. Tickets are issued only after the relevant payment and supplier conditions are satisfied.
+9. Duplicate webhook delivery must not issue duplicate tickets.
+10. Refunds and cancellations must update related order and ticket states consistently.
+11. Admin changes affecting sold inventory must be audited.
+12. Taxes, service fees and discounts must be transparent before payment.
+13. Historical orders and invoices must remain available after an event is archived.
+14. Invoice numbering must follow the applicable legal and accounting requirements.
+15. Supplier restrictions and event-specific ticket conditions must be displayed to customers.
+
+# 18. Legal and Operational Readiness
+
+Mastrotickets is a Hungary-based business. Before launch, confirm:
+
+- Company and payment-provider eligibility.
+- Authorized ticket inventory and resale rights.
+- Applicable VAT and invoicing requirements.
+- Consumer rights, refund and cancellation policies.
+- GDPR requirements, data retention and data-subject request handling.
+- Cookie consent and marketing consent.
+- Supplier ticket transfer restrictions.
+- Appropriate customer support procedures.
+- Secure payment and incident response procedures.
+
+The platform must not imply an official Formula 1 partnership unless such a partnership exists.
+
+# 19. Nonfunctional Requirements
+
+## Performance
+
+- Fast initial page rendering.
+- Responsive image delivery.
+- Pagination for large event, customer and order tables.
+- Appropriate caching for public event data.
+- No caching of private account information across users.
+- Lazy loading for below-the-fold imagery.
+- Graceful loading and error states.
+
+## Reliability
+
+- Durable payment and email processing.
+- Idempotent webhook handling.
+- Recoverable reservation workflows.
+- Database backups and restore testing.
+- Monitoring of payment failures and delivery errors.
+- No destructive full-database overwrite operations.
+
+## Accessibility
+
+- Keyboard-accessible navigation.
+- Accessible labels for form controls.
+- Screen-reader-compatible seat-selection alternatives.
+- Visible focus indicators.
+- Sufficient contrast.
+- Meaningful error messages.
+- Responsive layouts at common viewport sizes.
+
+## Privacy and security
+
+- Server-side authentication verification.
+- Role-based authorization.
+- Rate limiting and request validation.
+- Secret management.
+- Least-privilege access.
+- Secure HTTP transport.
+- Audit logging.
+- Appropriate data retention and deletion procedures.
+- Dependency updates and vulnerability checks.
+
+# 20. Testing and Acceptance Criteria
+
+The project is not complete merely because the homepage looks correct.
+
+### Frontend
+
+- All public routes render correctly.
+- Desktop and mobile navigation work.
+- Event search and filters work.
+- Day selection updates the booking summary.
+- Quantity controls work.
+- Cart items can be added, updated and removed.
+- Seat selection reflects actual availability where supported.
+- All buttons have a defined action.
+- Loading, empty and error states exist.
+
+### Backend
+
+- Protected endpoints reject missing or invalid authentication.
+- Customers cannot read other customers' orders.
+- Unauthorized users cannot access admin endpoints.
+- Server-calculated totals cannot be overridden by the browser.
+- Inventory cannot be oversold through concurrent reservations.
+- Expired reservations release inventory correctly.
+- Duplicate webhooks do not create duplicate orders or tickets.
+- Email failures can be retried safely.
+- Refunds are reflected consistently across payment, order and ticket records.
+
+### Admin
+
+- Authorized staff can create and publish events.
+- Ticket prices and inventory can be updated.
+- Customer and order searches work.
+- Payment references are visible to authorized staff.
+- Refund actions require the appropriate permission.
+- Marketing preferences and unsubscribe status are respected.
+- Sensitive operations appear in audit logs.
+
+### Launch gate
+
+The application cannot be considered production-ready until payment testing, inventory concurrency testing, access-control testing, backup recovery and authorized ticket-delivery testing have passed.
+
+# 21. Implementation Phases
+
+**Phase 1 — Design foundation**
+
+Implement the design system, responsive navigation, homepage, event cards, event detail pages, day selector and mock booking flow.
+
+**Phase 2 — Backend foundation**
+
+Implement PHP project structure, configuration management, Firebase token verification, Firestore repositories, validation and API error handling.
+
+**Phase 3 — Booking and inventory**
+
+Implement ticket types, reservations, availability, compatible add-ons, cart persistence and concurrency protection.
+
+**Phase 4 — Payments**
+
+Integrate Stripe test mode, checkout sessions, webhook verification, order transitions, refund handling and reconciliation.
+
+**Phase 5 — Customer and email**
+
+Implement customer accounts, order history, invoices, Resend templates and delivery-status tracking.
+
+**Phase 6 — Admin**
+
+Implement `/admin-panel/home`, event and ticket management, customers, orders, payments, refunds, email management, marketing and audit logs.
+
+**Phase 7 — Supplier integration**
+
+Connect an authorized ticket supplier or official distribution source, map inventory and ticket references, and validate delivery and transfer workflows.
+
+**Phase 8 — Production readiness**
+
+Run security, accessibility, load, concurrency, recovery and end-to-end tests. Configure production secrets, domain, monitoring, backups and operational procedures.
+
+---
+
+# 22. Master Instruction for Google AI Studio
+
+Use the following implementation instruction with this PRD as the source of truth.
+
+**SYSTEM / PROJECT INSTRUCTION**
+
+You are the lead product engineer, senior React and TypeScript developer, PHP backend architect, Firebase engineer and UI/UX designer responsible for implementing Mastrotickets.
+
+Build a production-oriented Formula 1 ticketing marketplace according to this PRD. Treat every mandatory requirement as a requirement, not an optional suggestion.
+
+### Design instructions
+
+1. The entire primary storefront must use a premium dark theme.
+2. The Formula 1 visual identity is mandatory across the homepage, event listings, ticket details and premium experiences.
+3. Use cinematic racing imagery, racing-red accents, bold editorial typography and carefully structured ticket-commerce layouts.
+4. Reproduce the quality and general interaction conventions of Ticketmaster's ticket-buying experience without copying proprietary branding or assets.
+5. Do not fall back to a generic white ecommerce template.
+6. Create reusable components, consistent spacing, design tokens and responsive layouts.
+7. Implement real interactions, validation, loading states, errors and empty states.
+8. Make the interface work at desktop, tablet and mobile breakpoints.
+
+### Engineering instructions
+
+1. Use React and TypeScript, preferably within Next.js unless the project environment requires a different supported setup.
+2. Implement the PHP REST API as a separate backend application.
+3. Use Firebase Authentication for customer identity and Cloud Firestore for persistent business data.
+4. Use the official Stripe PHP SDK for server-created checkout sessions, payment processing and verified webhooks.
+5. Use Resend for transactional email delivery and Cloudinary for managed imagery.
+6. Keep all privileged API credentials on the server.
+7. Never use local storage as the authoritative source for ticket inventory, payment status or orders.
+8. Use server-side pricing, transactional inventory reservation, expiration handling and idempotent payment processing.
+9. Do not invent ticket inventory, seat availability, official ticket barcodes or supplier integrations.
+10. Provide development fixtures only when clearly labeled and separated from production data.
+11. Implement proper authentication, authorization, validation, logging and error handling.
+12. Preserve the order and payment history and never perform unsafe full-database replacement operations.
+13. Use the exact admin route `/admin-panel/home` as the main administrative landing page.
+14. Do not claim that a payment, ticket issuance, email delivery or deployment succeeded without verifying the result.
+
+### Working method
+
+- First inspect the existing project files and available development environment.
+- Preserve any existing working implementation and configuration.
+- Create a clear implementation plan and project structure.
+- Build the design system and public storefront first.
+- Then implement the API and database integration.
+- Integrate authentication, inventory, checkout and webhooks.
+- Build the admin panel and communications.
+- Add automated tests and setup documentation.
+- Verify each phase before moving to the next.
+- Do not replace missing integrations with fake success responses.
+- If a required external credential or authorized ticket supplier is unavailable, implement the appropriate interface, document the missing configuration and keep the feature clearly marked as not connected.
+
+### Required deliverables
+
+1. Responsive Mastrotickets storefront.
+2. Grand Prix event listing and detail pages.
+3. Ticket-day, category, quantity and add-on selection.
+4. Seat selection when supported by inventory.
+5. Cart and Stripe checkout.
+6. PHP REST API.
+7. Firestore database structure and security rules.
+8. Firebase Authentication integration.
+9. Resend transactional email integration.
+10. Cloudinary media integration.
+11. Customer account and order history.
+12. Admin panel at `/admin-panel/home`.
+13. Event, ticket, inventory, order, payment, refund, invoice and customer management.
+14. Marketing and email administration.
+15. Tests, environment-variable documentation and deployment instructions.
+16. A documented list of integrations still requiring credentials or supplier authorization.
+
+**Final acceptance rule:** Deliver a cohesive, fully navigable application with working features wherever the required services are configured. A visually convincing prototype is the first milestone, not proof of a functioning ticket-selling business.

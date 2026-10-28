@@ -1,0 +1,20 @@
+{
+  "name": "mastrotickets/backend-api",
+  "description": "Production PHP REST API for Mastrotickets - Formula 1 Ticketing Marketplace",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "stripe/stripe-php": "^13.0",
+    "google/cloud-firestore": "^1.42",
+    "kreait/firebase-php": "^7.11",
+    "resend/resend-php": "^0.11",
+    "cloudinary/cloudinary_php": "^2.14",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "Mastrotickets\\": "src/"
+    }
+  }
+}
