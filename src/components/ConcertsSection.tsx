@@ -26,13 +26,13 @@ export const ConcertsSection: React.FC<ConcertsSectionProps> = ({ navigate }) =>
           <div>
             <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#163A63] uppercase tracking-wider mb-1">
               <Music className="w-3.5 h-3.5" />
-              <span>ETIHAD PARK · YASALAM AFTER-RACE CONCERTS</span>
+              <span>BUDAPEST, HUNGARY · AFTER-RACE CONCERTS</span>
             </div>
             <h2 className="font-sports font-black text-2xl sm:text-3xl text-[#0B1F3A] uppercase tracking-wide">
               After-Race Concert Passes
             </h2>
             <p className="text-xs sm:text-sm text-[#64748B] mt-1 max-w-2xl font-sans">
-              World-class headliners live at Etihad Park after track action concludes. General entry is included with all 3-day tickets; Golden Circle front-stage upgrades and standalone concert passes can be added here.
+              World-class headliners live in Budapest after track action concludes at the Hungaroring. Explore front-stage upgrades and standalone concert passes below.
             </p>
           </div>
         </div>
@@ -58,7 +58,7 @@ export const ConcertsSection: React.FC<ConcertsSectionProps> = ({ navigate }) =>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
                   
                   <div className="absolute top-3 left-3 bg-[#0B1F3A]/90 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-xs">
-                    <span>{relatedEvent?.country || 'Abu Dhabi'}</span>
+                    <span>{relatedEvent?.country || 'Budapest, Hungary'}</span>
                   </div>
 
                   <div className="absolute bottom-3 left-3 right-3 text-white">

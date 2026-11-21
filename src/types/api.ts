@@ -22,6 +22,47 @@ export interface ApiErrorResponse {
   errors?: Record<string, string>;
 }
 
+export interface CreateReservationItemInput {
+  ticketTypeId: string;
+  quantity: number;
+  seatDetails?: {
+    grandstand: string;
+    row: string;
+    seatNumber: number;
+  };
+}
+
+export interface CreateReservationRequest {
+  eventId: string;
+  items: CreateReservationItemInput[];
+  customerEmail?: string;
+  previousReservationId?: string;
+  idempotencyKey?: string;
+}
+
+export interface ReservationResponse {
+  reservationId: string;
+  reservationReference: string;
+  expiresAt: string;
+  total: number;
+  currency: string;
+  reused?: boolean;
+  items: Array<{
+    ticketTypeId: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    fee: number;
+    totalPrice: number;
+    availableAfterHold?: number;
+  }>;
+}
+
+export interface ReleaseReservationResponse {
+  reservationId: string;
+  released: boolean;
+}
+
 export interface CreateCheckoutSessionRequest {
   eventId: string;
   items: CartItem[];
@@ -29,6 +70,8 @@ export interface CreateCheckoutSessionRequest {
   customerName: string;
   customerPhone?: string;
   discountCode?: string;
+  reservationId?: string;
+  idempotencyKey?: string;
 }
 
 export interface CreateCheckoutSessionResponse {
@@ -109,4 +152,44 @@ export interface AdminDashboardStats {
     status: string;
     created_at: string;
   }>;
+}
+
+export interface CustomerRegisterRequest {
+  displayName: string;
+  email: string;
+  password: string;
+  phone?: string;
+  country?: string;
+}
+
+export interface CustomerLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface CustomerAuthResponse {
+  token: string;
+  user: {
+    uid: string;
+    email: string;
+    displayName: string;
+    phone?: string;
+    country?: string;
+    role: string;
+    emailVerified: boolean;
+    authProvider: 'password' | 'google';
+  };
+  claimedOrdersCount: number;
+}
+
+export interface ClaimGuestOrdersResponse {
+  claimedOrdersCount: number;
+}
+
+export interface PublicRecentPurchase {
+  id: string;
+  anonymizedName: string;
+  itemLabel: string;
+  purchasedAt: string;
+  isDemo?: boolean;
 }

@@ -32,21 +32,21 @@ export const Footer: React.FC<FooterProps> = ({ navigate }) => {
             </button>
             
             <p className="text-xs text-[#94A3B8] leading-relaxed max-w-sm">
-              Official ticketing and motorsport hospitality specialist for Formula 1 championships, covered grandstands, Yasalam after-race concerts at Etihad Park, and Yas Island theme park access.
+              Official ticketing and motorsport hospitality specialist based in Budapest, Hungary for Formula 1 championships, covered grandstands at the Hungaroring, post-race concerts, and VIP paddock access.
             </p>
 
             <div className="pt-1 text-xs text-[#94A3B8] space-y-2">
               <p className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
-                <span>Yas Marina Circuit · Yas Island, Abu Dhabi, UAE</span>
+                <span>Hungaroring · Budapest, Hungary</span>
               </p>
               <p className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                <span>concierge@mastrotickets.ae</span>
+                <span>concierge@mastrotickets.co</span>
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                <span>+971 (2) 659-9800 (Mon–Sun 09:00–20:00 GST)</span>
+                <span>+36 1 550 7400 (Mon–Sun 09:00–20:00 CET)</span>
               </p>
             </div>
           </div>
@@ -58,8 +58,8 @@ export const Footer: React.FC<FooterProps> = ({ navigate }) => {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button onClick={() => navigate('/races/abu-dhabi-grand-prix-2026')} className="hover:text-white transition-colors cursor-pointer text-left">
-                  Abu Dhabi Grand Prix (Finale)
+                <button onClick={() => navigate('/races/hungarian-grand-prix-2026')} className="hover:text-white transition-colors cursor-pointer text-left">
+                  Hungarian Grand Prix (Budapest)
                 </button>
               </li>
               <li>
@@ -98,7 +98,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate }) => {
             <ul className="space-y-2 text-xs">
               <li>
                 <button onClick={() => navigate('/#concerts')} className="hover:text-white transition-colors cursor-pointer text-left">
-                  Yasalam After-Race Concerts
+                  Budapest After-Race Concerts
                 </button>
               </li>
               <li>
@@ -113,12 +113,12 @@ export const Footer: React.FC<FooterProps> = ({ navigate }) => {
               </li>
               <li>
                 <button onClick={() => navigate('/#premium')} className="hover:text-white transition-colors cursor-pointer text-left">
-                  Yas Marina Superyacht VIP
+                  Hungaroring Super Gold VIP
                 </button>
               </li>
               <li>
                 <button onClick={() => navigate('/help')} className="hover:text-white transition-colors cursor-pointer text-left">
-                  Theme Park Access Passes
+                  Budapest Circuit Transfers
                 </button>
               </li>
             </ul>
@@ -181,7 +181,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate }) => {
           </p>
 
           <p className="text-[11px] max-w-xl text-center md:text-right leading-relaxed">
-            Legal notice: F1, FORMULA 1, GRAND PRIX, and related marks are trademarks of Formula One Licensing B.V. Mastrotickets issues authorized promoter passes for Yas Marina Circuit and official events.
+            Legal notice: F1, FORMULA 1, GRAND PRIX, and related marks are trademarks of Formula One Licensing B.V. Mastrotickets operates from Budapest, Hungary and issues verified passes for the Hungaroring and official Formula 1 events.
           </p>
         </div>
 

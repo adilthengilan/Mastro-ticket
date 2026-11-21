@@ -44,11 +44,6 @@ export const PrintableTicketPage: React.FC<PrintableTicketPageProps> = ({
     }
   }
 
-  // Fallback if none found: show first ticket of first order
-  if (targetTickets.length === 0 && orders.length > 0 && orders[0].tickets.length > 0) {
-    targetTickets = [{ ticket: orders[0].tickets[0], order: orders[0] }];
-  }
-
   const handlePrint = () => {
     window.print();
   };

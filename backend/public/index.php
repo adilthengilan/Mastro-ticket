@@ -7,10 +7,12 @@ require_once __DIR__ . '/../src/autoload.php';
 
 use Mastrotickets\Config\Env;
 use Mastrotickets\Controllers\AdminController;
+use Mastrotickets\Controllers\AuthController;
 use Mastrotickets\Controllers\CheckoutController;
 use Mastrotickets\Controllers\EventController;
 use Mastrotickets\Controllers\HealthController;
 use Mastrotickets\Controllers\OrderController;
+use Mastrotickets\Controllers\PurchaseFeedController;
 use Mastrotickets\Controllers\TicketController;
 use Mastrotickets\Controllers\WebhookController;
 use Mastrotickets\Http\Request;
@@ -51,6 +53,25 @@ try {
         (new HealthController())->check($request);
     }
 
+    // Public anonymized live purchase feed (only confirmed/paid orders)
+    if ($method === 'GET' && $cleanUri === '/api/v1/public/recent-purchases') {
+        (new PurchaseFeedController())->recent($request);
+    }
+
+    // Optional Customer Authentication & Secure Guest Order Linking
+    if ($method === 'POST' && $cleanUri === '/api/v1/auth/register') {
+        (new AuthController())->register($request);
+    }
+    if ($method === 'POST' && $cleanUri === '/api/v1/auth/login') {
+        (new AuthController())->login($request);
+    }
+    if ($method === 'POST' && $cleanUri === '/api/v1/auth/google') {
+        (new AuthController())->googleSignIn($request);
+    }
+    if ($method === 'POST' && $cleanUri === '/api/v1/auth/claim-guest-orders') {
+        (new AuthController())->claimGuestOrders($request);
+    }
+
     // Events routes
     if ($method === 'GET' && $cleanUri === '/api/v1/events') {
         (new EventController())->index($request);
@@ -67,7 +88,13 @@ try {
         (new TicketController())->verify($request, $matches[1]);
     }
 
-    // Checkout routes
+    // Checkout & Atomic Reservation routes (open for guest checkout and authenticated buyers)
+    if ($method === 'POST' && $cleanUri === '/api/v1/reservations') {
+        (new CheckoutController())->createReservation($request);
+    }
+    if ($method === 'POST' && preg_match('#^/api/v1/reservations/([a-zA-Z0-9\-_]+)/release$#', $cleanUri, $matches)) {
+        (new CheckoutController())->releaseReservation($request, $matches[1]);
+    }
     if ($method === 'POST' && $cleanUri === '/api/v1/checkout/session') {
         (new CheckoutController())->createSession($request);
     }
@@ -81,6 +108,9 @@ try {
     }
 
     // Orders routes
+    if ($method === 'GET' && $cleanUri === '/api/v1/orders/mine') {
+        (new AuthController())->myOrders($request);
+    }
     if ($method === 'GET' && preg_match('#^/api/v1/orders/session/([a-zA-Z0-9\-_]+)$#', $cleanUri, $matches)) {
         (new OrderController())->bySession($request, $matches[1]);
     }

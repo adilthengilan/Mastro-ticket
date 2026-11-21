@@ -10,7 +10,9 @@ import {
   Clock,
   Ticket,
   Tag,
-  Check
+  Check,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 interface CartPageProps {
@@ -20,6 +22,7 @@ interface CartPageProps {
 export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
   const {
     cart,
+    tickets,
     updateCartQuantity,
     removeFromCart,
     clearCart,
@@ -27,17 +30,24 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
     appliedDiscount,
     applyDiscountCode,
     removeDiscountCode,
-    reservationTimeRemaining
+    reservationTimeRemaining,
+    activeReservation,
+    reservationExpiredNotice,
+    clearReservationExpiredNotice,
+    reserveItemsForCart,
+    refreshLiveInventory,
   } = useStore();
 
   const [promoInput, setPromoInput] = useState('');
   const [promoMessage, setPromoMessage] = useState<{ text: string; success: boolean } | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [isValidatingCheckout, setIsValidatingCheckout] = useState(false);
 
   // Subtotal calculations
   const subtotal = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
   const serviceFees = cart.reduce((acc, item) => acc + item.fee * item.quantity, 0);
   const tax = Math.round((subtotal + serviceFees) * 0.10); // 10% VAT
-  
+
   let discountAmount = 0;
   if (appliedDiscount) {
     if (appliedDiscount.discountPercent) {
@@ -63,6 +73,37 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
     setPromoMessage({ text: res.message, success: res.success });
     if (res.success) {
       setPromoInput('');
+    }
+  };
+
+  const handleQuantityChange = (cartItemId: string, nextQuantity: number) => {
+    setStockError(null);
+    const res = updateCartQuantity(cartItemId, nextQuantity);
+    if (!res.success && res.error) {
+      setStockError(res.error);
+    }
+  };
+
+  const handleProceedToCheckout = async () => {
+    if (isValidatingCheckout || cart.length === 0) return;
+    setIsValidatingCheckout(true);
+    setStockError(null);
+    clearReservationExpiredNotice();
+
+    try {
+      const eventId = cart[0]?.eventId || '';
+      const res = await reserveItemsForCart(cart, eventId);
+      if (!res.success) {
+        await refreshLiveInventory({ eventId });
+        setStockError(
+          res.error ||
+            'Live ticket availability has changed. Please adjust your quantity before continuing.'
+        );
+        return;
+      }
+      navigate('/checkout');
+    } finally {
+      setIsValidatingCheckout(false);
     }
   };
 
@@ -94,7 +135,6 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
   return (
     <div className="bg-[#FFFFFF] min-h-screen py-8 sm:py-12 text-[#111827]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
         {/* Title & Reservation Hold Timer */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
@@ -102,19 +142,24 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
               Review Your Shopping Cart
             </h1>
             <p className="text-xs text-[#64748B] mt-0.5 font-sans">
-              {cart.length} ticket selection(s) held in your temporary reservation.
+              {cart.reduce((sum, i) => sum + i.quantity, 0)} ticket(s) selected across {cart.length}{' '}
+              {cart.length === 1 ? 'category' : 'categories'}.
             </p>
           </div>
 
           {/* Hold Timer Banner */}
-          <div className={`px-3.5 py-1.5 rounded-md border flex items-center gap-2 text-xs ${
-            reservationTimeRemaining < 120
-              ? 'bg-red-50 border-red-200 text-red-700'
-              : 'bg-[#F5F7FA] border-[#E2E8F0] text-[#0B1F3A]'
-          }`}>
+          <div
+            className={`px-3.5 py-1.5 rounded-md border flex items-center gap-2 text-xs ${
+              reservationTimeRemaining < 120
+                ? 'bg-red-50 border-red-200 text-red-700'
+                : 'bg-[#F5F7FA] border-[#E2E8F0] text-[#0B1F3A]'
+            }`}
+          >
             <Clock className="w-3.5 h-3.5 shrink-0 text-[#123B67]" />
             <div>
-              <span className="text-[#64748B]">Tickets Reserved: </span>
+              <span className="text-[#64748B]">
+                {activeReservation ? 'Tickets Reserved: ' : 'Session Timer: '}
+              </span>
               <strong className="font-mono font-bold text-[#0B1F3A]">
                 {formatTimer(reservationTimeRemaining)}
               </strong>
@@ -122,12 +167,22 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
           </div>
         </div>
 
+        {(reservationExpiredNotice || stockError) && (
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs text-red-800">
+            <AlertCircle className="w-4 h-4 text-[#B91C1C] shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-[#991B1B] uppercase tracking-wide text-[11px]">
+                Inventory & Reservation Notice
+              </p>
+              <p>{stockError || reservationExpiredNotice}</p>
+            </div>
+          </div>
+        )}
+
         {/* 2-Column Commerce Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
           {/* Main Cart Items Column */}
           <div className="lg:col-span-8 space-y-4">
-            
             <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-xs">
               <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between text-xs font-semibold text-[#64748B] uppercase tracking-wider bg-[#F5F7FA]">
                 <span>Selected Tickets & Sessions</span>
@@ -140,81 +195,103 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
               </div>
 
               <div className="divide-y divide-[#E2E8F0]">
-                {cart.map((item) => (
-                  <div key={item.id} className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    
-                    {/* Item Details */}
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-[#163A63] uppercase">
-                        <span>{item.eventName}</span>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-[#64748B]">{item.raceDay}</span>
+                {cart.map((item) => {
+                  const liveTicket = tickets.find((t) => t.id === item.ticketTypeId);
+                  const heldByThisUser =
+                    activeReservation &&
+                    activeReservation.items.some((i) => i.ticketTypeId === item.ticketTypeId)
+                      ? activeReservation.items
+                          .filter((i) => i.ticketTypeId === item.ticketTypeId)
+                          .reduce((sum, i) => sum + i.quantity, 0)
+                      : 0;
+                  const effectiveMax = liveTicket
+                    ? Math.min(
+                        Math.max(1, liveTicket.maxPerOrder || 8),
+                        liveTicket.availableQuantity + heldByThisUser
+                      )
+                    : 8;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    >
+                      {/* Item Details */}
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-[#163A63] uppercase">
+                          <span>{item.eventName}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-[#64748B]">{item.raceDay}</span>
+                        </div>
+
+                        <h3 className="font-sports font-bold text-xl text-[#0B1F3A] uppercase tracking-wide">
+                          {item.ticketName}
+                        </h3>
+
+                        <p className="text-xs text-[#64748B] font-sans">
+                          {item.circuit} · {item.section}
+                        </p>
+
+                        {liveTicket && !item.isAddon && (
+                          <p className="text-[11px] font-mono text-[#15803D]">
+                            {liveTicket.availableQuantity + heldByThisUser} available · Max{' '}
+                            {liveTicket.maxPerOrder || 8} per order
+                          </p>
+                        )}
                       </div>
 
-                      <h3 className="font-sports font-bold text-xl text-[#0B1F3A] uppercase tracking-wide">
-                        {item.ticketName}
-                      </h3>
+                      {/* Quantity Controls & Price */}
+                      <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[#E2E8F0]">
+                        {!item.seatDetails ? (
+                          <div className="flex items-center border border-[#E2E8F0] rounded bg-[#F5F7FA]">
+                            <button
+                              type="button"
+                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                              className="p-1.5 text-[#64748B] hover:text-[#0B1F3A] transition-colors cursor-pointer"
+                              title="Decrease quantity"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-8 text-center font-mono font-bold text-xs text-[#0B1F3A]">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!item.isAddon && item.quantity >= effectiveMax}
+                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                              className="p-1.5 text-[#64748B] hover:text-[#0B1F3A] disabled:opacity-35 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                              title="Increase quantity"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[#64748B] font-mono">1 allocated seat</span>
+                        )}
 
-                      <p className="text-xs text-[#64748B] font-sans">
-                        {item.circuit} · {item.section}
-                      </p>
+                        {/* Line Price */}
+                        <div className="text-right">
+                          <div className="text-base font-bold text-[#111827] font-mono tabular-nums">
+                            {formatPrice(item.unitPrice * item.quantity)}
+                          </div>
+                          <div className="text-[10px] text-[#64748B]">
+                            ({formatPrice(item.unitPrice)} each)
+                          </div>
+                        </div>
 
-                      {item.seatDetails && (
-                        <div className="inline-block mt-1 px-2.5 py-0.5 rounded bg-[#F5F7FA] border border-[#E2E8F0] text-xs font-mono text-[#15803D]">
-                          Seat Assigned: Row {item.seatDetails.row}, Seat {item.seatDetails.seatNumber}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Quantity Controls & Price */}
-                    <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[#E2E8F0]">
-                      
-                      {!item.seatDetails ? (
-                        <div className="flex items-center border border-[#E2E8F0] rounded bg-[#F5F7FA]">
-                          <button
-                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                            className="p-1.5 text-[#64748B] hover:text-[#0B1F3A] transition-colors cursor-pointer"
-                            title="Decrease quantity"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="w-8 text-center font-mono font-bold text-xs text-[#0B1F3A]">
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                            className="p-1.5 text-[#64748B] hover:text-[#0B1F3A] transition-colors cursor-pointer"
-                            title="Increase quantity"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-[#64748B] font-mono">1 allocated seat</span>
-                      )}
-
-                      {/* Line Price */}
-                      <div className="text-right">
-                        <div className="text-base font-bold text-[#111827] font-mono tabular-nums">
-                          {formatPrice(item.unitPrice * item.quantity)}
-                        </div>
-                        <div className="text-[10px] text-[#64748B]">
-                          ({formatPrice(item.unitPrice)} each)
-                        </div>
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(item.id)}
+                          className="p-1.5 text-[#94A3B8] hover:text-[#B91C1C] rounded transition-colors cursor-pointer"
+                          title="Remove item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="p-1.5 text-[#94A3B8] hover:text-[#B91C1C] rounded transition-colors cursor-pointer"
-                        title="Remove item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
-
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -242,7 +319,7 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
                 <form onSubmit={handleApplyPromo} className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Enter code (e.g. F1START2026, YASVIP)..."
+                    placeholder="Enter promotional or corporate code..."
                     value={promoInput}
                     onChange={(e) => setPromoInput(e.target.value)}
                     className="flex-1 px-3.5 py-1.5 bg-[#F5F7FA] border border-[#E2E8F0] rounded text-xs text-[#111827] placeholder-[#64748B] uppercase focus:border-[#0B1F3A] focus:outline-none"
@@ -312,11 +389,22 @@ export const CartPage: React.FC<CartPageProps> = ({ navigate }) => {
               </div>
 
               <button
-                onClick={() => navigate('/checkout')}
-                className="w-full py-2.5 bg-[#123B67] hover:bg-[#1D5288] text-white text-xs font-semibold uppercase tracking-wider rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                type="button"
+                disabled={isValidatingCheckout}
+                onClick={() => void handleProceedToCheckout()}
+                className="w-full py-2.5 bg-[#123B67] hover:bg-[#1D5288] text-white text-xs font-semibold uppercase tracking-wider rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <span>Proceed to Checkout</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                {isValidatingCheckout ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Verifying Live Stock...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Proceed to Checkout</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
               </button>
 
               <button

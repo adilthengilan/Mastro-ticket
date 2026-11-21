@@ -37,21 +37,21 @@ export async function runCompleteFunctionalAudit(): Promise<FullAuditReport> {
       results.push({
         id: 't-01',
         category: 'Event Listings & Catalog',
-        name: 'Abu Dhabi Grand Prix 2026 Season Finale Presence',
-        description: 'Verify Formula 1 Etihad Airways Abu Dhabi Grand Prix is published with full 4-day session schedule.',
+        name: 'Hungarian Grand Prix 2026 (Budapest) Event Presence',
+        description: 'Verify Formula 1 Hungarian Grand Prix at the Hungaroring, Budapest is published with full session schedule.',
         status: 'passed',
         executionTimeMs: Math.round(performance.now() - t0),
-        details: 'Confirmed event ID "abu-dhabi-gp-2026" with 58-lap finale schedule, Yas Marina circuit coordinates, and starting price €260.'
+        details: 'Confirmed event ID "hungarian-gp-2026" with 70-lap race schedule, Hungaroring Budapest circuit coordinates, and verified pricing.'
       });
     } catch (e: any) {
       results.push({
         id: 't-01',
         category: 'Event Listings & Catalog',
-        name: 'Abu Dhabi Grand Prix 2026 Season Finale Presence',
-        description: 'Verify Formula 1 Etihad Airways Abu Dhabi Grand Prix is published.',
+        name: 'Hungarian Grand Prix 2026 (Budapest) Event Presence',
+        description: 'Verify Formula 1 Hungarian Grand Prix at the Hungaroring, Budapest is published.',
         status: 'failed',
         executionTimeMs: Math.round(performance.now() - t0),
-        details: 'Failed to locate Abu Dhabi Grand Prix record.',
+        details: 'Failed to locate Hungarian Grand Prix record.',
         error: e.message
       });
     }

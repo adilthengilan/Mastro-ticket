@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { StoreProvider } from './services/store';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
+import { ScrollingTrustBanner } from './components/ScrollingTrustBanner';
 import { Footer } from './components/Footer';
 import { YasConciergeWidget } from './components/YasConciergeWidget';
+import { LivePurchaseToast } from './components/LivePurchaseToast';
 import { HomePage } from './pages/HomePage';
 import { RacesPage } from './pages/RacesPage';
 import { RaceDetailPage } from './pages/RaceDetailPage';
@@ -10,6 +13,7 @@ import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { AccountPage } from './pages/AccountPage';
+import { AuthPage } from './pages/AuthPage';
 import { AdminPanel } from './pages/AdminPanel';
 import { HelpPage } from './pages/HelpPage';
 import { TicketVerificationPage } from './pages/TicketVerificationPage';
@@ -20,7 +24,7 @@ export default function App() {
     return window.location.pathname || '/';
   });
 
-  const [lastConfirmedOrderId, setLastConfirmedOrderId] = useState<string>('ord-89412');
+  const [lastConfirmedOrderId, setLastConfirmedOrderId] = useState<string>('');
 
   // Sync with browser navigation
   useEffect(() => {
@@ -46,8 +50,9 @@ export default function App() {
       return;
     }
 
+    const cleanPath = path.split('?')[0] || '/';
     window.history.pushState({}, '', path);
-    setCurrentPath(path);
+    setCurrentPath(cleanPath);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -60,7 +65,7 @@ export default function App() {
 
     if (currentPath === '/races' || currentPath.startsWith('/races?')) {
       const searchParams = new URLSearchParams(window.location.search);
-      const search = searchParams.get('search') || '';
+      const search = searchParams.get('search') || searchParams.get('q') || '';
       return <RacesPage navigate={navigate} initialSearch={search} />;
     }
 
@@ -82,10 +87,28 @@ export default function App() {
       );
     }
 
-    if (currentPath.startsWith('/order-confirmed')) {
+    if (currentPath.startsWith('/order-confirmed') || currentPath.startsWith('/booking-confirmation')) {
       const parts = currentPath.split('/');
       const orderId = parts[2] || lastConfirmedOrderId;
       return <OrderConfirmationPage orderId={orderId} navigate={navigate} />;
+    }
+
+    // Optional Customer Auth Routes (/login, /register, /auth)
+    if (currentPath === '/login' || currentPath === '/register' || currentPath === '/auth') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const modeParam = searchParams.get('mode');
+      const initialMode =
+        currentPath === '/register' || modeParam === 'register' ? 'register' : 'login';
+      const prefillEmail = searchParams.get('email') || '';
+      const redirectAfter = searchParams.get('next') || '/account';
+      return (
+        <AuthPage
+          navigate={navigate}
+          initialMode={initialMode}
+          prefillEmail={prefillEmail}
+          redirectAfter={redirectAfter}
+        />
+      );
     }
 
     // Public Ticket Enquiry & Verification Routes
@@ -150,32 +173,42 @@ export default function App() {
   const isPrintRoute = currentPath.includes('/print') || (currentPath.startsWith('/orders/') && currentPath.endsWith('/tickets'));
 
   return (
-    <StoreProvider>
-      <div className="min-h-screen flex flex-col bg-[#F5F7FA] text-[#111827] selection:bg-[#123B67] selection:text-white">
-        {/* Render Site Header only when not inside admin panel or print view */}
-        {!isAdminRoute && !isPrintRoute && (
-          <Header
-            currentPath={currentPath}
-            navigate={navigate}
-            onOpenSearch={() => navigate('/races')}
-          />
-        )}
+    <ErrorBoundary>
+      <StoreProvider>
+        <div className="min-h-screen flex flex-col bg-[#F5F7FA] text-[#111827] selection:bg-[#123B67] selection:text-white">
+          {/* Site-wide Crimson Red Auto-Scrolling Trusted Reseller Banner */}
+          {!isAdminRoute && !isPrintRoute && (
+            <ScrollingTrustBanner variant="top" navigate={navigate} />
+          )}
 
-        {/* Dynamic Route Content */}
-        <main className="flex-1">
-          {renderCurrentRoute()}
-        </main>
+          {/* Render Site Header only when not inside admin panel or print view */}
+          {!isAdminRoute && !isPrintRoute && (
+            <Header
+              currentPath={currentPath}
+              navigate={navigate}
+              onOpenSearch={() => navigate('/races')}
+            />
+          )}
 
-        {/* Floating Yas Concierge Widget */}
-        {!isAdminRoute && !isPrintRoute && (
-          <YasConciergeWidget navigate={navigate} />
-        )}
+          {/* Dynamic Route Content */}
+          <main className="flex-1">
+            {renderCurrentRoute()}
+          </main>
 
-        {/* Site Footer */}
-        {!isAdminRoute && !isPrintRoute && (
-          <Footer navigate={navigate} />
-        )}
-      </div>
-    </StoreProvider>
+          {/* Live Purchase Notifications (Bottom-left, strictly anonymized completed purchases) */}
+          {!isAdminRoute && !isPrintRoute && <LivePurchaseToast />}
+
+          {/* Floating Yas Concierge Widget */}
+          {!isAdminRoute && !isPrintRoute && (
+            <YasConciergeWidget navigate={navigate} />
+          )}
+
+          {/* Site Footer */}
+          {!isAdminRoute && !isPrintRoute && (
+            <Footer navigate={navigate} />
+          )}
+        </div>
+      </StoreProvider>
+    </ErrorBoundary>
   );
 }

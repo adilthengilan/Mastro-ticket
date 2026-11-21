@@ -80,7 +80,7 @@ class AdminController
         AuthMiddleware::requireAdmin($request);
         $db = Database::getConnection();
 
-        // Total Revenue in AED
+        // Total Revenue in USD
         $revStmt = $db->query("SELECT COALESCE(SUM(total), 0) as total_rev FROM orders WHERE status IN ('paid', 'confirmed')");
         $totalRevenue = (float)$revStmt->fetchColumn();
 
@@ -115,7 +115,7 @@ class AdminController
 
         Response::success([
             'totalRevenue' => $totalRevenue,
-            'currency' => 'AED',
+            'currency' => 'USD',
             'totalOrders' => $totalOrders,
             'ticketsSold' => $ticketsSold,
             'activeHolds' => $activeHolds,

@@ -6,16 +6,26 @@ namespace Mastrotickets\Controllers;
 use Mastrotickets\Config\Database;
 use Mastrotickets\Http\Request;
 use Mastrotickets\Http\Response;
+use Mastrotickets\Services\ReservationService;
 use PDO;
 
 class TicketController
 {
     public function index(Request $request): void
     {
+        // Reclaim any expired 10-minute holds before serving live inventory
+        try {
+            ReservationService::releaseExpiredReservations();
+        } catch (\Throwable $e) {
+            // Proceed to serve inventory even if cleanup hits lock contention
+        }
+
         $db = Database::getConnection();
         $eventId = $request->getQuery('eventId');
         $category = $request->getQuery('category');
         $raceDay = $request->getQuery('raceDay');
+        $minQuantityRaw = $request->getQuery('minQuantity');
+        $minQuantity = is_numeric($minQuantityRaw) ? max(0, (int)$minQuantityRaw) : 0;
 
         $query = 'SELECT * FROM ticket_types WHERE 1=1';
         $params = [];
@@ -25,12 +35,17 @@ class TicketController
             $params['eid'] = $eventId;
         }
         if (!empty($category)) {
-            $query .= ' AND category = :cat';
+            $query .= ' AND (category = :cat OR category_slug = :catSlug)';
             $params['cat'] = $category;
+            $params['catSlug'] = $category;
         }
         if (!empty($raceDay)) {
             $query .= ' AND race_day = :rday';
             $params['rday'] = $raceDay;
+        }
+        if ($minQuantity > 0) {
+            $query .= " AND available_quantity >= :minQty AND status != 'sold_out'";
+            $params['minQty'] = $minQuantity;
         }
 
         $query .= ' ORDER BY price ASC';
@@ -42,7 +57,7 @@ class TicketController
             return [
                 'id' => $t['id'],
                 'eventId' => $t['event_id'],
-                'category' => $t['category'],
+                'category' => $t['category'] ?? $t['category_slug'] ?? 'grandstand',
                 'raceDay' => $t['race_day'],
                 'name' => $t['name'],
                 'section' => $t['section'],

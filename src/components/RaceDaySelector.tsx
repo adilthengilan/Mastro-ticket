@@ -16,28 +16,28 @@ export const RaceDaySelector: React.FC<RaceDaySelectorProps> = ({ selectedDay, o
     {
       id: 'Weekend Pass',
       label: 'Full Weekend',
-      date: 'Dec 4–6',
+      date: 'Jul 24–26',
       tag: 'Most Popular'
     },
     {
       id: 'Sunday',
       label: 'Sunday Race',
-      date: 'Dec 6 (Final)'
+      date: 'Jul 26 (Final)'
     },
     {
       id: 'Saturday',
       label: 'Saturday Qualifying',
-      date: 'Dec 5'
+      date: 'Jul 25'
     },
     {
       id: 'Friday',
       label: 'Friday Practice',
-      date: 'Dec 4'
+      date: 'Jul 24'
     },
     {
       id: 'Thursday',
       label: 'Thursday Pit Walk',
-      date: 'Dec 3'
+      date: 'Jul 23'
     }
   ];
 
@@ -46,7 +46,7 @@ export const RaceDaySelector: React.FC<RaceDaySelectorProps> = ({ selectedDay, o
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-3">
         <div>
           <div className="text-[10px] font-bold text-[#163A63] uppercase tracking-wider mb-0.5">
-            YAS MARINA CIRCUIT TIMETABLE
+            HUNGARORING · BUDAPEST CIRCUIT TIMETABLE
           </div>
           <h2 className="font-sports font-black text-xl sm:text-2xl text-[#0B1F3A] uppercase tracking-wide">
             Select Your Race Session

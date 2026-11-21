@@ -12,7 +12,7 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
   const [messages, setMessages] = useState<Array<{ sender: 'bot' | 'user'; text: string; time: string }>>([
     {
       sender: 'bot',
-      text: 'Marhaba! Welcome to Yas Island & Abu Dhabi Grand Prix Concierge. How can we assist your race weekend planning?',
+      text: 'Welcome to the Budapest & Hungaroring Grand Prix Concierge! How can we assist your race weekend planning in Hungary?',
       time: 'Just now'
     }
   ]);
@@ -33,15 +33,15 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
     setMessage('');
 
     setTimeout(() => {
-      let botReply = 'Thank you for your message! Our Yas Marina Concierge team is reviewing your request. For immediate assistance with grandstand seat allocations or Paddock Club suites, call +971 (2) 659-9800.';
+      let botReply = 'Thank you for your message! Our Budapest Concierge team is reviewing your request. For immediate assistance with Hungaroring grandstands or Paddock Club suites, call +36 1 550 7400.';
       const lower = userText.toLowerCase();
 
       if (lower.includes('ticket') || lower.includes('booking') || lower.includes('order')) {
         botReply = `You have ${orders.length} active booking(s) on file. You can access your official barcoded e-tickets immediately in the "Manage Booking" section.`;
-      } else if (lower.includes('concert') || lower.includes('yasalam') || lower.includes('eminem')) {
-        botReply = 'All 3-Day Abu Dhabi Grand Prix tickets include complimentary admission to all 4 nights of Yasalam After-Race Concerts at Etihad Park (Thursday to Sunday)!';
-      } else if (lower.includes('park') || lower.includes('ferrari') || lower.includes('kid')) {
-        botReply = 'Under the "Kids Go Free" initiative, children under 12 receive free access to Ferrari World, Warner Bros. World, and SeaWorld Yas Island with paying adults!';
+      } else if (lower.includes('concert') || lower.includes('music') || lower.includes('budapest')) {
+        botReply = 'Explore our Hungarian Grand Prix 3-Day Weekend Passes and Budapest post-race concert & fan zone experiences directly from our race directory!';
+      } else if (lower.includes('transfer') || lower.includes('hungaroring') || lower.includes('location')) {
+        botReply = 'The Hungaroring is located just 20 km northeast of central Budapest in Mogyoród, Hungary, with dedicated shuttle buses and HÉV commuter rail connections from Örs vezér tere.';
       }
 
       setMessages((prev) => [
@@ -62,7 +62,7 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
         <button
           onClick={() => setIsOpen(true)}
           className="w-14 h-14 rounded-full bg-[#123B67] hover:bg-[#1D5288] text-white shadow-xl flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-2 border-white/60"
-          title="Chat with Yas Island Concierge"
+          title="Chat with Budapest Concierge"
         >
           <MessageSquare className="w-6 h-6 fill-white text-white" />
         </button>
@@ -76,14 +76,14 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
           <div className="bg-[#0B1F3A] p-4 border-b border-[#163A63] flex items-center justify-between text-white">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#163A63] text-white font-black flex items-center justify-center font-sports text-xs tracking-wider border border-white/20">
-                YAS
+                BUD
               </div>
               <div>
                 <h3 className="font-sports font-black text-sm uppercase tracking-wide text-white flex items-center gap-1.5">
-                  <span>Yas Island Concierge</span>
+                  <span>Budapest Concierge</span>
                   <span className="w-2 h-2 rounded-full bg-[#15803D] animate-pulse" />
                 </h3>
-                <p className="text-[10px] text-slate-300">Official Yas Marina Race Support</p>
+                <p className="text-[10px] text-slate-300">Official Hungaroring, Budapest Support</p>
               </div>
             </div>
 
@@ -105,11 +105,11 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
               <span>My E-Tickets</span>
             </button>
             <button
-              onClick={() => navigate('/races/abu-dhabi-grand-prix-2026')}
+              onClick={() => navigate('/races/hungarian-grand-prix-2026')}
               className="px-2.5 py-1 rounded-full bg-white border border-[#E2E8F0] hover:bg-slate-50 text-[#0B1F3A] flex items-center gap-1 whitespace-nowrap cursor-pointer shadow-2xs"
             >
               <MapPin className="w-3 h-3 text-[#163A63]" />
-              <span>Grandstands</span>
+              <span>Hungaroring</span>
             </button>
           </div>
 
@@ -141,7 +141,7 @@ export const YasConciergeWidget: React.FC<YasConciergeWidgetProps> = ({ navigate
           >
             <input
               type="text"
-              placeholder="Ask about tickets, concerts, parks..."
+              placeholder="Ask about tickets, Hungaroring, Budapest..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               className="flex-1 px-3.5 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-full text-xs text-[#111827] placeholder-[#94A3B8] focus:border-[#123B67] focus:outline-none"

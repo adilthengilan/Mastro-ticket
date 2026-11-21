@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../services/store';
 import { checkoutService } from '../services/checkoutService';
+import { ApiError } from '../services/apiClient';
 import {
   ShieldCheck,
   CreditCard,
   Lock,
   AlertCircle,
-  Clock
+  Clock,
+  RefreshCw,
 } from 'lucide-react';
 
 interface CheckoutPageProps {
@@ -15,12 +17,26 @@ interface CheckoutPageProps {
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCompleted }) => {
-  const { cart, formatPrice, appliedDiscount, createOrder, currentUser, reservationTimeRemaining } = useStore();
+  const {
+    cart,
+    formatPrice,
+    appliedDiscount,
+    createOrder,
+    currentUser,
+    isAuthenticated,
+    reservationTimeRemaining,
+    activeReservation,
+    reservationExpiredNotice,
+    clearReservationExpiredNotice,
+    reserveItemsForCart,
+    releaseActiveReservation,
+    refreshLiveInventory,
+  } = useStore();
 
   const subtotal = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
   const serviceFees = cart.reduce((acc, item) => acc + item.fee * item.quantity, 0);
   const tax = Math.round((subtotal + serviceFees) * 0.10);
-  
+
   let discountAmount = 0;
   if (appliedDiscount) {
     if (appliedDiscount.discountPercent) {
@@ -37,30 +53,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
   );
   const [customerEmail, setCustomerEmail] = useState(currentUser.email || '');
   const [customerPhone, setCustomerPhone] = useState(currentUser.phone || '');
-  const [customerCountry, setCustomerCountry] = useState(currentUser.country || 'United Arab Emirates');
-  
+  const [customerCountry, setCustomerCountry] = useState(currentUser.country || 'Hungary');
+
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [taxId, setTaxId] = useState('');
 
-  // Attendee names map
   const totalTicketCount = cart.reduce((acc, i) => acc + i.quantity, 0);
-  const [attendeeNames, setAttendeeNames] = useState<string[]>(() => {
-    return Array.from({ length: totalTicketCount }, (_, i) =>
-      i === 0 && currentUser.displayName && currentUser.displayName !== 'Guest Customer'
-        ? currentUser.displayName
-        : ''
-    );
-  });
-
-  const updateAttendeeName = (index: number, name: string) => {
-    setAttendeeNames((prev) => {
-      const copy = [...prev];
-      copy[index] = name;
-      return copy;
-    });
-  };
 
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'apple_pay' | 'google_pay'>('card');
@@ -71,18 +71,60 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
 
   const [termsAccepted, setTermsAccepted] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRevalidatingHold, setIsRevalidatingHold] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const idempotencyKeyRef = useRef<string>(`chk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
-  // Test card autofill shortcut for testing
-  const fillTestCard = () => {
-    setCardNumber('4242 4242 4242 4242');
-    setCardExpiry('12/28');
-    setCardCvc('888');
-    setCardHolder(customerName || 'Ticket Purchaser');
+  // Handle Stripe cancellation redirect (?status=cancelled&reservation_id=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'cancelled') {
+      const cancelledResId = params.get('reservation_id');
+      const handleCancelCleanup = async () => {
+        if (cancelledResId) {
+          await checkoutService.releaseReservation(cancelledResId, 'payment_cancelled').catch(() => {});
+        }
+        await releaseActiveReservation('payment_cancelled');
+        await refreshLiveInventory({ eventId: cart[0]?.eventId });
+        setErrorMsg(
+          'Your payment was cancelled and the reserved tickets were released back to live inventory. Re-verify availability below to try again.'
+        );
+      };
+      void handleCancelCleanup();
+      window.history.replaceState({}, '', '/checkout');
+    }
+  }, []);
+
+  const isHoldExpired =
+    Boolean(reservationExpiredNotice) ||
+    (activeReservation === null && reservationTimeRemaining === 0);
+
+  const handleReverifyAvailability = async () => {
+    if (isRevalidatingHold || cart.length === 0) return;
+    setIsRevalidatingHold(true);
+    setErrorMsg('');
+    clearReservationExpiredNotice();
+    try {
+      const eventId = cart[0]?.eventId || '';
+      await refreshLiveInventory({ eventId });
+      const res = await reserveItemsForCart(cart, eventId);
+      if (!res.success) {
+        setErrorMsg(
+          res.error ||
+            'Insufficient inventory remaining for your selection. Please return to the event page to pick from updated options.'
+        );
+      } else {
+        idempotencyKeyRef.current = `chk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+    } finally {
+      setIsRevalidatingHold(false);
+    }
   };
 
   const handleCompleteOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing) return;
+
     if (!termsAccepted) {
       setErrorMsg('Please accept the ticket terms and conditions to proceed.');
       return;
@@ -94,37 +136,74 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
 
     setIsProcessing(true);
     setErrorMsg('');
+    clearReservationExpiredNotice();
+
+    const eventId = cart[0]?.eventId || '';
+    const attemptKey = idempotencyKeyRef.current;
 
     try {
-      // Build attendees list
-      const attendees = attendeeNames.map((name, i) => ({
-        fullName: name || `Attendee ${i + 1}`,
+      // 1. Live inventory check & atomic reservation immediately before payment confirmation
+      // Reuses existing valid hold (no double deduction) or acquires a fresh atomic hold
+      const reservationResult = await reserveItemsForCart(cart, eventId, attemptKey);
+      if (!reservationResult.success || !reservationResult.reservation) {
+        await refreshLiveInventory({ eventId });
+        setIsProcessing(false);
+        setErrorMsg(
+          reservationResult.error ||
+            'Selected tickets are no longer available in live inventory. Please refresh available options.'
+        );
+        return;
+      }
+
+      const confirmedReservation = reservationResult.reservation;
+
+      // Populate ticket holder records from primary customer details
+      const attendees = Array.from({ length: Math.max(1, totalTicketCount) }, () => ({
+        fullName: customerName.trim() || 'Ticket Holder',
         email: customerEmail,
-        ticketId: cart[0]?.ticketTypeId || 'tkt'
+        ticketId: cart[0]?.ticketTypeId || 'tkt',
       }));
 
-      // 1. Attempt authoritative Stripe Checkout Session on PHP Backend
+      // 2. Attempt authoritative Stripe Checkout Session on PHP Backend (reusing active reservationId)
       try {
         const session = await checkoutService.createSession({
-          eventId: cart[0]?.eventId || 'abu-dhabi-gp-2026',
+          eventId,
           items: cart,
           customerEmail,
           customerName,
           customerPhone,
           discountCode: appliedDiscount?.code,
+          reservationId: confirmedReservation.source === 'remote' ? confirmedReservation.reservationId : undefined,
+          idempotencyKey: attemptKey,
         });
 
         if (session && session.checkoutUrl) {
-          // Redirect browser to official Stripe Hosted Checkout
           window.location.href = session.checkoutUrl;
           return;
         }
-      } catch (backendError) {
-        // Log backend status and smoothly continue local flow if backend is offline/previewing
-        console.info('[MastroTickets] Remote API checkout session offline, proceeding with verified order generation:', backendError);
+      } catch (backendError: any) {
+        // Real stock conflict or validation error from backend: release hold, refresh inventory, STOP checkout!
+        if (
+          backendError instanceof ApiError &&
+          (backendError.statusCode === 409 || backendError.statusCode === 422 || backendError.statusCode === 400)
+        ) {
+          await releaseActiveReservation('payment_failed');
+          await refreshLiveInventory({ eventId });
+          setIsProcessing(false);
+          setErrorMsg(
+            backendError.message ||
+              'Inventory changed before payment could be authorized. Available options have been refreshed.'
+          );
+          return;
+        }
+        // Network/offline API fallback for local preview mode
+        console.info(
+          '[MastroTickets] Remote API checkout session offline, proceeding with verified order generation:',
+          backendError
+        );
       }
 
-      // 2. Authoritative local order generation fallback (preview & dev mode)
+      // 3. Authoritative local order generation fallback (preview & dev mode — reuses active hold without double deduction)
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       const order = await createOrder({
@@ -137,19 +216,27 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
           city,
           postalCode,
           country: customerCountry,
-          taxId: taxId || undefined
+          taxId: taxId || undefined,
         },
         attendees,
         paymentMethod: paymentMethod === 'apple_pay' ? 'Apple Pay (Stripe)' : 'Credit Card (Stripe)',
-        cardLast4: '4242'
+        cardLast4: cardNumber.replace(/\D/g, '').slice(-4) || undefined,
+        idempotencyKey: attemptKey,
       });
 
       setIsProcessing(false);
       onOrderCompleted(order.id);
       navigate(`/order-confirmed/${order.id}`);
     } catch (err: any) {
+      // Payment failed -> release held inventory immediately so stock is never leaked
+      await releaseActiveReservation('payment_failed');
+      await refreshLiveInventory({ eventId });
+      idempotencyKeyRef.current = `chk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setIsProcessing(false);
-      setErrorMsg(err.message || 'Payment verification failed. Please check your credentials or try another method.');
+      setErrorMsg(
+        err.message ||
+          'Payment verification failed and your held inventory has been released. Please check your details and try again.'
+      );
     }
   };
 
@@ -161,54 +248,103 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
   return (
     <div className="bg-[#FFFFFF] min-h-screen py-8 sm:py-12 text-[#111827]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
         {/* Header */}
-        <div className="mb-6">
-          <div className="text-[10px] font-bold text-[#163A63] uppercase tracking-wider mb-0.5">
-            SECURE CHECKOUT · MASTROTICKETS
+        <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-bold text-[#163A63] uppercase tracking-wider mb-0.5">
+              SECURE CHECKOUT · MASTROTICKETS
+            </div>
+            <h1 className="font-sports font-black text-3xl sm:text-4xl text-[#0B1F3A] uppercase tracking-tight">
+              Complete Your Booking
+            </h1>
+            <p className="text-xs text-[#64748B] mt-0.5 font-sans">
+              Enter your contact, billing, and payment details to complete your official ticket reservation.
+            </p>
           </div>
-          <h1 className="font-sports font-black text-3xl sm:text-4xl text-[#0B1F3A] uppercase tracking-tight">
-            Complete Your Booking
-          </h1>
-          <p className="text-xs text-[#64748B] mt-0.5 font-sans">
-            Review attendee credentials, enter billing details, and complete your official grandstand reservation.
-          </p>
+
+          {!isAuthenticated && (
+            <div className="bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg px-3.5 py-2.5 text-xs flex items-center gap-3">
+              <span className="text-[#475569]">
+                Checking out as <strong className="text-[#0B1F3A]">Guest</strong> · No account needed
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/login?next=/checkout')}
+                className="text-[#123B67] font-semibold hover:underline whitespace-nowrap cursor-pointer"
+              >
+                Sign in
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Temporary Inventory Hold Countdown Banner */}
-        <div className="mb-6 p-4 rounded-xl border border-[#E2E8F0] bg-[#F5F7FA] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#0B1F3A] text-white flex items-center justify-center shrink-0">
-              <Clock className="w-5 h-5 text-sky-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-sports font-bold text-sm text-[#0B1F3A] uppercase tracking-wide">
-                  10-Minute Inventory Hold Active
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-[#15803D] uppercase tracking-wider border border-emerald-200">
-                  Seats Reserved
-                </span>
+        {/* Expired Reservation Recovery Banner OR Active Hold Countdown */}
+        {isHoldExpired ? (
+          <div className="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-[#B91C1C] shrink-0 mt-0.5" />
+              <div>
+                <p className="font-sports font-bold text-sm text-[#991B1B] uppercase tracking-wide">
+                  Reservation Hold Expired
+                </p>
+                <p className="text-xs text-red-800 mt-0.5 font-sans">
+                  {reservationExpiredNotice ||
+                    'Your 10-minute reservation expired and held tickets were returned to live inventory.'}
+                </p>
               </div>
-              <p className="text-xs text-[#64748B] mt-0.5 font-sans">
-                Your selected grandstand allocations are held exclusively. Complete checkout before expiration to prevent automatic inventory release.
-              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={isRevalidatingHold}
+                onClick={() => void handleReverifyAvailability()}
+                className="px-4 py-2 bg-[#123B67] hover:bg-[#1D5288] text-white text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRevalidatingHold ? 'animate-spin' : ''}`} />
+                <span>Re-verify Stock & Hold</span>
+              </button>
             </div>
           </div>
-          <div className="flex items-center sm:flex-col items-end shrink-0 sm:pl-4 sm:border-l border-[#E2E8F0]">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mr-2 sm:mr-0">
-              Hold Expires In:
-            </span>
-            <span
-              className={`font-mono font-bold text-lg sm:text-xl ${
-                reservationTimeRemaining < 120 ? 'text-[#B91C1C] animate-pulse' : 'text-[#0B1F3A]'
-              }`}
-            >
-              {String(Math.floor(reservationTimeRemaining / 60)).padStart(2, '0')}:
-              {String(reservationTimeRemaining % 60).padStart(2, '0')}
-            </span>
+        ) : (
+          <div className="mb-6 p-4 rounded-xl border border-[#E2E8F0] bg-[#F5F7FA] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#0B1F3A] text-white flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-sky-400" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-sports font-bold text-sm text-[#0B1F3A] uppercase tracking-wide">
+                    10-Minute Inventory Hold Active
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-[#15803D] uppercase tracking-wider border border-emerald-200">
+                    {totalTicketCount} {totalTicketCount === 1 ? 'Ticket' : 'Tickets'} Reserved
+                  </span>
+                  {activeReservation?.reservationReference && (
+                    <span className="text-[10px] font-mono text-[#64748B]">
+                      Ref: {activeReservation.reservationReference}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#64748B] mt-0.5 font-sans">
+                  Your selected ticket allocation is held exclusively. Complete checkout before expiration to prevent automatic inventory release.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center sm:flex-col items-end shrink-0 sm:pl-4 sm:border-l border-[#E2E8F0]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mr-2 sm:mr-0">
+                Hold Expires In:
+              </span>
+              <span
+                className={`font-mono font-bold text-lg sm:text-xl ${
+                  reservationTimeRemaining < 120 ? 'text-[#B91C1C] animate-pulse' : 'text-[#0B1F3A]'
+                }`}
+              >
+                {String(Math.floor(reservationTimeRemaining / 60)).padStart(2, '0')}:
+                {String(reservationTimeRemaining % 60).padStart(2, '0')}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <form onSubmit={handleCompleteOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
@@ -255,7 +391,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
                   <input
                     type="tel"
                     required
-                    placeholder="+971 50 000 0000"
+                    placeholder="+36 30 000 0000"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded text-[#111827] focus:border-[#0B1F3A] focus:outline-none placeholder:text-[#94A3B8]"
@@ -276,42 +412,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
               </div>
             </div>
 
-            {/* 2. Attendee Verification */}
-            <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-xs">
-              <h3 className="font-sports font-bold text-lg text-[#0B1F3A] uppercase tracking-wide mb-1 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[#0B1F3A] text-white text-[10px] flex items-center justify-center font-bold">
-                  2
-                </span>
-                <span>Attendee Names on Tickets ({totalTicketCount})</span>
-              </h3>
-              <p className="text-xs text-[#64748B] mb-3 font-sans">
-                Yas Marina Circuit security requires personalized ticket names matching government photo IDs for circuit gate entry.
-              </p>
-
-              <div className="space-y-2">
-                {attendeeNames.map((name, idx) => (
-                  <div key={idx} className="flex items-center gap-2.5">
-                    <span className="text-xs font-mono font-bold text-[#64748B] w-20 shrink-0">
-                      Ticket #{idx + 1}:
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      placeholder={`Full name for Attendee #${idx + 1}...`}
-                      value={name}
-                      onChange={(e) => updateAttendeeName(idx, e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-[#F5F7FA] border border-[#E2E8F0] rounded text-xs text-[#111827] focus:border-[#0B1F3A] focus:outline-none"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Billing Address */}
+            {/* 2. Billing Address */}
             <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-xs">
               <h3 className="font-sports font-bold text-lg text-[#0B1F3A] uppercase tracking-wide mb-3 flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#0B1F3A] text-white text-[10px] flex items-center justify-center font-bold">
-                  3
+                  2
                 </span>
                 <span>Billing Address & Invoicing</span>
               </h3>
@@ -334,7 +439,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
                   <input
                     type="text"
                     required
-                    placeholder="City or Emirate"
+                    placeholder="Budapest"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded text-[#111827] focus:border-[#0B1F3A] focus:outline-none placeholder:text-[#94A3B8]"
@@ -366,23 +471,15 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
               </div>
             </div>
 
-            {/* 4. Payment Integration — Stripe */}
+            {/* 3. Payment Integration — Stripe */}
             <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-xs">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-sports font-bold text-lg text-[#0B1F3A] uppercase tracking-wide flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-[#0B1F3A] text-white text-[10px] flex items-center justify-center font-bold">
-                    4
+                    3
                   </span>
-                  <span>Payment Method (Stripe Test Mode)</span>
+                  <span>Payment Method (Stripe)</span>
                 </h3>
-
-                <button
-                  type="button"
-                  onClick={fillTestCard}
-                  className="text-[11px] font-semibold text-[#123B67] hover:underline cursor-pointer uppercase"
-                >
-                  Autofill Test Card
-                </button>
               </div>
 
               {/* Payment selector tabs */}
@@ -549,13 +646,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
 
               <button
                 type="submit"
-                disabled={isProcessing}
-                className="w-full py-3 bg-[#123B67] hover:bg-[#1D5288] text-white text-xs font-semibold uppercase tracking-wider rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                disabled={isProcessing || isHoldExpired}
+                className="w-full py-3 bg-[#123B67] hover:bg-[#1D5288] text-white text-xs font-semibold uppercase tracking-wider rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isProcessing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Authorizing Payment (Stripe)...</span>
+                    <span>Verifying Stock & Authorizing Payment...</span>
+                  </>
+                ) : isHoldExpired ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    <span>Hold Expired · Re-verify Stock Above</span>
                   </>
                 ) : (
                   <>

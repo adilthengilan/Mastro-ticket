@@ -1,0 +1,448 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL HARDENED PRIMITIVES
+    // =========================================================================
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'adilthengilan123@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS (Strict Shape + Bounds)
+    // =========================================================================
+    function isValidEvent(data) {
+      return data.keys().hasAll(['id', 'slug', 'name', 'circuit', 'location', 'country', 'status', 'startingPrice']) &&
+        data.keys().hasOnly([
+          'id', 'slug', 'name', 'officialTitle', 'circuit', 'location', 'country',
+          'countryCode', 'flag', 'dates', 'startDate', 'endDate', 'round', 'season',
+          'timezone', 'banner', 'circuitMapSvg', 'description', 'status', 'startingPrice',
+          'featured', 'lapDistance', 'numberOfLaps', 'raceDistance', 'lapRecord', 'schedule'
+        ]) &&
+        isValidId(data.id) &&
+        data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 160 && data.slug.matches('^[a-z0-9\\-]+$') &&
+        isNonEmptyString(data.name, 200) &&
+        isNonEmptyString(data.circuit, 160) &&
+        isNonEmptyString(data.location, 160) &&
+        isNonEmptyString(data.country, 100) &&
+        data.status in ['published', 'draft', 'archived'] &&
+        data.startingPrice is number && data.startingPrice >= 0 &&
+        isOptionalString(data, 'banner', 1000) &&
+        isOptionalString(data, 'description', 4000) &&
+        isOptionalString(data, 'officialTitle', 240) &&
+        isOptionalString(data, 'dates', 100) &&
+        isOptionalString(data, 'timezone', 64);
+    }
+
+    function isValidTicket(data) {
+      return data.keys().hasAll(['id', 'eventId', 'category', 'raceDay', 'name', 'section', 'price', 'fee', 'capacity', 'availableQuantity', 'status', 'maxPerOrder']) &&
+        data.keys().hasOnly([
+          'id', 'eventId', 'category', 'raceDay', 'name', 'section', 'description',
+          'price', 'originalPrice', 'fee', 'capacity', 'availableQuantity', 'features',
+          'isAssignedSeating', 'deliveryType', 'status', 'maxPerOrder', 'imageUrl', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.eventId) &&
+        data.category in ['grandstand', 'general_admission', 'vip_hospitality', 'weekend_bundle', 'concert'] &&
+        isNonEmptyString(data.raceDay, 64) &&
+        isNonEmptyString(data.name, 200) &&
+        isNonEmptyString(data.section, 200) &&
+        data.price is number && data.price >= 0 &&
+        data.fee is number && data.fee >= 0 &&
+        data.capacity is number && data.capacity >= 0 && data.capacity <= 500000 &&
+        data.availableQuantity is number && data.availableQuantity >= 0 && data.availableQuantity <= data.capacity &&
+        data.status in ['available', 'low_inventory', 'sold_out'] &&
+        data.maxPerOrder is number && data.maxPerOrder >= 1 && data.maxPerOrder <= 50 &&
+        isOptionalString(data, 'imageUrl', 1000) &&
+        isOptionalString(data, 'description', 3000) &&
+        (!('features' in data) || (data.features is list && data.features.size() <= 25 && (data.features.size() == 0 || data.features[0] is string)));
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'name', 'slug']) &&
+        data.keys().hasOnly(['id', 'name', 'slug', 'description', 'badgeColor', 'ticketCount']) &&
+        isValidId(data.id) &&
+        isNonEmptyString(data.name, 120) &&
+        data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120 && data.slug.matches('^[a-z0-9_\\-]+$') &&
+        isOptionalString(data, 'description', 500) &&
+        isOptionalString(data, 'badgeColor', 32);
+    }
+
+    function isValidConcert(data) {
+      return data.keys().hasAll(['id', 'eventId', 'name', 'artist', 'price']) &&
+        data.keys().hasOnly([
+          'id', 'eventId', 'name', 'artist', 'venue', 'date', 'time', 'price',
+          'description', 'image', 'entryConditions', 'requiresRaceTicket', 'availableTickets'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.eventId) &&
+        isNonEmptyString(data.name, 200) &&
+        isNonEmptyString(data.artist, 160) &&
+        data.price is number && data.price >= 0 &&
+        isOptionalString(data, 'image', 1000) &&
+        isOptionalString(data, 'venue', 200) &&
+        isOptionalString(data, 'description', 2000);
+    }
+
+    function isValidPremiumPackage(data) {
+      return data.keys().hasAll(['id', 'eventId', 'name', 'tier', 'price']) &&
+        data.keys().hasOnly([
+          'id', 'eventId', 'name', 'tier', 'price', 'description',
+          'image', 'inclusions', 'daysIncluded', 'availableQuantity'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.eventId) &&
+        isNonEmptyString(data.name, 200) &&
+        isNonEmptyString(data.tier, 80) &&
+        data.price is number && data.price >= 0 &&
+        isOptionalString(data, 'image', 1000) &&
+        isOptionalString(data, 'description', 2000) &&
+        (!('inclusions' in data) || (data.inclusions is list && data.inclusions.size() <= 25 && (data.inclusions.size() == 0 || data.inclusions[0] is string)));
+    }
+
+    function isValidDiscount(data) {
+      return data.keys().hasAll(['id', 'code', 'minSpend', 'maxUsage', 'usedCount', 'validUntil', 'active']) &&
+        data.keys().hasOnly(['id', 'code', 'discountPercent', 'discountAmount', 'minSpend', 'maxUsage', 'usedCount', 'validUntil', 'active']) &&
+        isValidId(data.id) &&
+        data.code is string && data.code.size() >= 2 && data.code.size() <= 64 && data.code.matches('^[A-Z0-9_\\-]+$') &&
+        data.minSpend is number && data.minSpend >= 0 &&
+        data.maxUsage is number && data.maxUsage >= 1 &&
+        data.usedCount is number && data.usedCount >= 0 &&
+        isNonEmptyString(data.validUntil, 32) &&
+        data.active is bool;
+    }
+
+    function isValidReservation(data) {
+      return data.keys().hasAll(['id', 'reservationReference', 'customerId', 'eventId', 'items', 'total', 'currency', 'status', 'createdAt', 'expiresAt']) &&
+        data.keys().hasOnly([
+          'id', 'reservationReference', 'customerId', 'customerEmail', 'eventId',
+          'items', 'total', 'currency', 'status', 'createdAt', 'expiresAt'
+        ]) &&
+        isValidId(data.id) &&
+        isNonEmptyString(data.reservationReference, 64) &&
+        isNonEmptyString(data.customerId, 128) &&
+        isValidId(data.eventId) &&
+        data.items is list && data.items.size() >= 1 && data.items.size() <= 25 &&
+        data.total is number && data.total >= 0 &&
+        data.currency == 'USD' &&
+        data.status in ['active', 'confirmed', 'expired', 'released'] &&
+        isNonEmptyString(data.createdAt, 64) &&
+        isNonEmptyString(data.expiresAt, 64) &&
+        isOptionalString(data, 'customerEmail', 254);
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'orderNumber', 'customerId', 'customerName', 'customerEmail', 'total', 'currency', 'status', 'createdAt']) &&
+        data.keys().hasOnly([
+          'id', 'orderNumber', 'customerId', 'customerName', 'customerEmail', 'customerPhone',
+          'customerCountry', 'billingAddress', 'attendees', 'items', 'subtotal', 'serviceFee',
+          'tax', 'discount', 'discountCode', 'total', 'currency', 'status', 'paymentId',
+          'stripeSessionId', 'paymentMethod', 'cardLast4', 'createdAt', 'confirmedAt',
+          'isGuestOrder', 'claimedAt', 'claimedByUid', 'tickets'
+        ]) &&
+        isValidId(data.id) &&
+        isNonEmptyString(data.orderNumber, 64) &&
+        isNonEmptyString(data.customerId, 128) &&
+        isNonEmptyString(data.customerName, 200) &&
+        isNonEmptyString(data.customerEmail, 254) &&
+        data.total is number && data.total >= 0 &&
+        data.currency == 'USD' &&
+        data.status in ['draft', 'pending_payment', 'paid', 'confirmed', 'partially_refunded', 'refunded', 'cancelled', 'payment_failed', 'expired'] &&
+        isNonEmptyString(data.createdAt, 64) &&
+        isOptionalString(data, 'customerPhone', 40) &&
+        isOptionalString(data, 'customerCountry', 100) &&
+        isOptionalString(data, 'paymentMethod', 80) &&
+        (!('items' in data) || (data.items is list && data.items.size() <= 50)) &&
+        (!('tickets' in data) || (data.tickets is list && data.tickets.size() <= 50));
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'phone', 'country', 'role', 'avatarUrl', 'emailVerified', 'authProvider', 'updatedAt']) &&
+        data.uid == userId &&
+        isNonEmptyString(data.email, 254) &&
+        isNonEmptyString(data.displayName, 200) &&
+        data.role in ['customer', 'admin'] &&
+        isOptionalString(data, 'phone', 40) &&
+        isOptionalString(data, 'country', 100) &&
+        isOptionalString(data, 'avatarUrl', 1000) &&
+        isOptionalString(data, 'authProvider', 32);
+    }
+
+    function isValidEmailJob(data) {
+      return data.keys().hasAll(['id', 'recipientEmail', 'recipientName', 'template', 'subject', 'status', 'sentAt']) &&
+        data.keys().hasOnly(['id', 'orderId', 'recipientEmail', 'recipientName', 'template', 'subject', 'bodyText', 'status', 'sentAt', 'errorReason', 'retryCount']) &&
+        isValidId(data.id) &&
+        isNonEmptyString(data.recipientEmail, 254) &&
+        isNonEmptyString(data.recipientName, 200) &&
+        isNonEmptyString(data.template, 64) &&
+        isNonEmptyString(data.subject, 300) &&
+        data.status in ['delivered', 'pending', 'failed'] &&
+        isNonEmptyString(data.sentAt, 64) &&
+        isOptionalString(data, 'bodyText', 12000) &&
+        isOptionalString(data, 'orderId', 128);
+    }
+
+    function isValidLedgerEntry(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'type', 'ticketTypeId', 'ticketName', 'quantityDelta', 'previousStock', 'newStock', 'referenceId', 'notes']) &&
+        data.keys().hasOnly(['id', 'timestamp', 'type', 'ticketTypeId', 'ticketName', 'quantityDelta', 'previousStock', 'newStock', 'referenceId', 'notes']) &&
+        isValidId(data.id) &&
+        isValidId(data.ticketTypeId) &&
+        isNonEmptyString(data.ticketName, 200) &&
+        data.quantityDelta is number &&
+        data.previousStock is number && data.previousStock >= 0 &&
+        data.newStock is number && data.newStock >= 0 &&
+        isNonEmptyString(data.type, 64) &&
+        isNonEmptyString(data.referenceId, 128) &&
+        isNonEmptyString(data.notes, 1000) &&
+        isNonEmptyString(data.timestamp, 64);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorId', 'action', 'targetRecord', 'timestamp']) &&
+        data.keys().hasOnly(['id', 'actorId', 'actorEmail', 'actorRole', 'action', 'targetRecord', 'timestamp', 'changeSummary']) &&
+        isValidId(data.id) &&
+        isNonEmptyString(data.actorId, 128) &&
+        isNonEmptyString(data.action, 80) &&
+        isNonEmptyString(data.targetRecord, 160) &&
+        isNonEmptyString(data.timestamp, 64) &&
+        isOptionalString(data, 'actorEmail', 254) &&
+        isOptionalString(data, 'actorRole', 64) &&
+        isOptionalString(data, 'changeSummary', 1000);
+    }
+
+    // =========================================================================
+    // CONNECTION TEST DOCUMENT
+    // =========================================================================
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // =========================================================================
+    // ADMIN REGISTRY (Write-locked to Firebase Console / Admin SDK)
+    // =========================================================================
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // PUBLIC STOREFRONT CATALOG (Admin-managed writes)
+    // =========================================================================
+    match /events/{eventId} {
+      allow get: if isValidId(eventId);
+      allow list: if true;
+      allow create: if isValidId(eventId) && isValidEvent(incoming()) && isAdmin();
+      allow update: if isValidId(eventId) && isValidEvent(incoming()) && isAdmin() &&
+        incoming().id == existing().id;
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+
+    match /tickets/{ticketId} {
+      allow get: if isValidId(ticketId);
+      allow list: if true;
+      allow create: if isValidId(ticketId) && isValidTicket(incoming()) &&
+        exists(/databases/$(database)/documents/events/$(incoming().eventId)) &&
+        isAdmin();
+      allow update: if isValidId(ticketId) && isValidTicket(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().eventId == existing().eventId && (
+          isAdmin() ||
+          // Action: Atomic reservation hold or release (stock & status fields ONLY)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['availableQuantity', 'status', 'updatedAt']) &&
+            incoming().availableQuantity >= 0 &&
+            incoming().availableQuantity <= existing().capacity
+          )
+        );
+      allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId) && isValidCategory(incoming()) && isAdmin();
+      allow update: if isValidId(categoryId) && isValidCategory(incoming()) && isAdmin() &&
+        incoming().id == existing().id;
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    match /concerts/{concertId} {
+      allow get: if isValidId(concertId);
+      allow list: if true;
+      allow create: if isValidId(concertId) && isValidConcert(incoming()) && isAdmin();
+      allow update: if isValidId(concertId) && isValidConcert(incoming()) && isAdmin() &&
+        incoming().id == existing().id;
+      allow delete: if isValidId(concertId) && isAdmin();
+    }
+
+    match /premiumPackages/{packageId} {
+      allow get: if isValidId(packageId);
+      allow list: if true;
+      allow create: if isValidId(packageId) && isValidPremiumPackage(incoming()) && isAdmin();
+      allow update: if isValidId(packageId) && isValidPremiumPackage(incoming()) && isAdmin() &&
+        incoming().id == existing().id;
+      allow delete: if isValidId(packageId) && isAdmin();
+    }
+
+    match /discounts/{discountId} {
+      allow get: if isValidId(discountId);
+      allow list: if true;
+      allow create: if isValidId(discountId) && isValidDiscount(incoming()) && isAdmin();
+      allow update: if isValidId(discountId) && isValidDiscount(incoming()) &&
+        incoming().id == existing().id && (
+          isAdmin() ||
+          // Action: Checkout promo usage counter increment by 1
+          (
+            existing().active == true &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['usedCount']) &&
+            incoming().usedCount == existing().usedCount + 1 &&
+            incoming().usedCount <= existing().maxUsage
+          )
+        );
+      allow delete: if isValidId(discountId) && isAdmin();
+    }
+
+    // =========================================================================
+    // ATOMIC RESERVATIONS (10-Minute Inventory Holds)
+    // =========================================================================
+    match /reservations/{reservationId} {
+      allow get: if isValidId(reservationId) && (
+        isAdmin() ||
+        (isSignedIn() && existing().customerId == request.auth.uid) ||
+        existing().customerId == 'guest'
+      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if isValidId(reservationId) && isValidReservation(incoming()) &&
+        incoming().status == 'active' &&
+        exists(/databases/$(database)/documents/events/$(incoming().eventId)) &&
+        (
+          isAdmin() ||
+          (isSignedIn() && incoming().customerId == request.auth.uid) ||
+          incoming().customerId == 'guest'
+        );
+      allow update: if isValidId(reservationId) && isValidReservation(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().eventId == existing().eventId &&
+        incoming().reservationReference == existing().reservationReference &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          // Action: Transition from active -> confirmed/expired/released (terminal state locked)
+          (
+            existing().status == 'active' &&
+            incoming().status in ['confirmed', 'expired', 'released'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+            (
+              (isSignedIn() && existing().customerId == request.auth.uid) ||
+              existing().customerId == 'guest'
+            )
+          )
+        );
+      allow delete: if isValidId(reservationId) && isAdmin();
+    }
+
+    // =========================================================================
+    // ORDERS (PII Isolated to Owner & Admin; Supports Verified Guest Checkout)
+    // =========================================================================
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (
+        isAdmin() ||
+        (isSignedIn() && existing().customerId == request.auth.uid)
+      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if isValidId(orderId) && isValidOrder(incoming()) &&
+        incoming().status == 'confirmed' && (
+          isAdmin() ||
+          (isSignedIn() && incoming().customerId == request.auth.uid) ||
+          (incoming().customerId == 'guest' && incoming().isGuestOrder == true)
+        );
+      allow update: if isValidId(orderId) && isValidOrder(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().orderNumber == existing().orderNumber &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          // Action: Verified signed-in customer claiming their own prior guest order by matching verified email
+          (
+            isVerifiedUser() &&
+            existing().customerId == 'guest' &&
+            existing().customerEmail == request.auth.token.email &&
+            incoming().customerId == request.auth.uid &&
+            incoming().claimedByUid == request.auth.uid &&
+            incoming().isGuestOrder == false &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['customerId', 'isGuestOrder', 'claimedByUid', 'claimedAt'])
+          )
+        );
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    // =========================================================================
+    // CUSTOMER PROFILES (Strict PII Isolation & Anti-Privilege-Escalation)
+    // =========================================================================
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isAdmin() || (isSignedIn() && request.auth.uid == userId));
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isSignedIn() && request.auth.uid == userId &&
+        isValidUserProfile(incoming(), userId) &&
+        (incoming().role == 'customer' || isAdmin());
+      allow update: if isValidId(userId) && isValidUserProfile(incoming(), userId) && (
+        isAdmin() ||
+        (
+          isSignedIn() && request.auth.uid == userId &&
+          incoming().uid == existing().uid &&
+          incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'country', 'avatarUrl', 'emailVerified', 'authProvider', 'updatedAt'])
+        )
+      );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // =========================================================================
+    // OPERATIONAL LOGS (Admin-Readable, Append-Only during Checkout)
+    // =========================================================================
+    match /emailJobs/{jobId} {
+      allow get: if isValidId(jobId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(jobId) && isValidEmailJob(incoming());
+      allow update, delete: if isValidId(jobId) && isAdmin();
+    }
+
+    match /inventoryLedger/{entryId} {
+      allow get: if isValidId(entryId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(entryId) && isValidLedgerEntry(incoming());
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId) && isValidAuditLog(incoming());
+      allow update, delete: if false;
+    }
+  }
+}

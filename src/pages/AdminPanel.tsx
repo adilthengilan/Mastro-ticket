@@ -3,6 +3,11 @@ import { useStore } from '../services/store';
 import { GrandPrixEvent, TicketType, EventCategory, Order, EmailJob, TicketCategory, RaceDayOption, IssuedTicket } from '../types';
 import { runCompleteFunctionalAudit, FullAuditReport } from '../services/qaAuditRunner';
 import {
+  uploadImageToCloudinary,
+  checkCloudinaryStatus,
+  CloudinaryFolder,
+} from '../services/cloudinaryService';
+import {
   LayoutDashboard,
   Calendar,
   Ticket,
@@ -34,7 +39,10 @@ import {
   CheckSquare,
   AlertTriangle,
   RefreshCw,
-  Printer
+  Printer,
+  Upload,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -56,6 +64,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
     reservations,
     formatPrice,
     currentUser,
+    isFirebaseAdmin,
+    firebaseAuthEmail,
+    signInAdminWithGoogle,
+    loginWithEmail,
+    logoutUser,
     updateEvent,
     createEvent,
     deleteEvent,
@@ -82,22 +95,88 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isEmailAuthBusy, setIsEmailAuthBusy] = useState(false);
+  const [isGoogleAuthBusy, setIsGoogleAuthBusy] = useState(false);
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  // Cloudinary Upload State
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [cloudinaryReady, setCloudinaryReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkCloudinaryStatus()
+      .then((res) => setCloudinaryReady(res.configured))
+      .catch(() => setCloudinaryReady(false));
+  }, []);
+
+  const handleCloudinaryUpload = async (
+    file: File | undefined,
+    folder: CloudinaryFolder,
+    fieldKey: string,
+    onSuccess: (secureUrl: string) => void
+  ) => {
+    if (!file) return;
+    setUploadingField(fieldKey);
+    setUploadError(null);
+    try {
+      const result = await uploadImageToCloudinary(file, folder);
+      onSuccess(result.url);
+      showToast('Image uploaded to Cloudinary successfully.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Cloudinary upload failed.';
+      setUploadError(message);
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginUsername.trim() === 'mastrotickets' && loginPassword === 'mastrotickets@123') {
+    setLoginError(null);
+    const identifier = loginUsername.trim();
+
+    if (identifier === 'mastrotickets' && loginPassword === 'mastrotickets@123') {
       setIsAdminAuthenticated(true);
       localStorage.setItem('mastrotickets_admin_auth', 'true');
-      setLoginError(null);
       showToast('Welcome, Administrator! Authenticated successfully.');
+      return;
+    }
+
+    if (identifier.includes('@')) {
+      setIsEmailAuthBusy(true);
+      const res = await loginWithEmail(identifier, loginPassword);
+      setIsEmailAuthBusy(false);
+      if (res.success) {
+        setIsAdminAuthenticated(true);
+        localStorage.setItem('mastrotickets_admin_auth', 'true');
+        showToast(res.message);
+      } else {
+        setLoginError(res.message);
+      }
+      return;
+    }
+
+    setLoginError('Invalid administrator credentials. Enter your Firebase admin email & password or local admin credentials.');
+  };
+
+  const handleAdminGoogleSignIn = async () => {
+    setIsGoogleAuthBusy(true);
+    setLoginError(null);
+    const res = await signInAdminWithGoogle();
+    setIsGoogleAuthBusy(false);
+    if (res.success) {
+      setIsAdminAuthenticated(true);
+      localStorage.setItem('mastrotickets_admin_auth', 'true');
+      showToast(res.message);
     } else {
-      setLoginError('Invalid administrator credentials. Please check your username and password.');
+      setLoginError(res.message);
     }
   };
 
   const handleAdminLogout = () => {
     setIsAdminAuthenticated(false);
     localStorage.removeItem('mastrotickets_admin_auth');
+    logoutUser();
     showToast('Signed out of Admin Panel.');
   };
 
@@ -174,31 +253,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
     circuit: '',
     location: '',
     country: '',
-    countryCode: 'AE',
-    flag: '🇦🇪',
-    dates: 'Dec 04 - Dec 06, 2026',
-    startDate: '2026-12-04',
-    endDate: '2026-12-06',
-    round: 24,
+    countryCode: 'HU',
+    flag: '🇭🇺',
+    dates: 'Jul 24 - Jul 26, 2026',
+    startDate: '2026-07-24',
+    endDate: '2026-07-26',
+    round: 13,
     season: 2026,
-    timezone: 'Asia/Dubai',
+    timezone: 'Europe/Budapest',
     banner: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80',
-    description: 'Official Formula 1 Grand Prix weekend featuring covered grandstands and after-race concerts.',
+    description: 'Official Formula 1 Hungarian Grand Prix weekend at the Hungaroring in Budapest featuring covered grandstands and VIP hospitality.',
     status: 'published' as const,
     startingPrice: 350,
     featured: true,
-    lapDistance: '5.281 km',
-    numberOfLaps: 58,
-    raceDistance: '306.183 km',
+    lapDistance: '4.381 km',
+    numberOfLaps: 70,
+    raceDistance: '306.630 km',
     lapRecord: {
-      time: '1:26.103',
-      driver: 'Max Verstappen',
-      year: 2021
+      time: '1:16.627',
+      driver: 'Lewis Hamilton',
+      year: 2020
     },
     schedule: [
       {
         day: 'Friday',
-        date: 'Dec 04, 2026',
+        date: 'Jul 24, 2026',
         sessions: [
           { name: 'Practice 1', time: '13:30 - 14:30', type: 'practice' as const },
           { name: 'Practice 2', time: '17:00 - 18:00', type: 'practice' as const }
@@ -206,17 +285,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
       },
       {
         day: 'Saturday',
-        date: 'Dec 05, 2026',
+        date: 'Jul 25, 2026',
         sessions: [
-          { name: 'Practice 3', time: '14:30 - 15:30', type: 'practice' as const },
-          { name: 'Qualifying', time: '18:00 - 19:00', type: 'qualifying' as const }
+          { name: 'Practice 3', time: '12:30 - 13:30', type: 'practice' as const },
+          { name: 'Qualifying', time: '16:00 - 17:00', type: 'qualifying' as const }
         ]
       },
       {
         day: 'Sunday',
-        date: 'Dec 06, 2026',
+        date: 'Jul 26, 2026',
         sessions: [
-          { name: 'Grand Prix (58 Laps)', time: '17:00', type: 'race' as const }
+          { name: 'Grand Prix (70 Laps)', time: '15:00', type: 'race' as const }
         ]
       }
     ]
@@ -228,13 +307,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
     eventId: events[0]?.id || '',
     category: 'grandstand' as TicketCategory,
     raceDay: '3-Day Package' as RaceDayOption,
-    section: 'Main Grandstand Covered',
-    description: 'Premium shaded grandstand with panoramic views of the main straight, pit lane, and podium ceremony.',
+    section: 'Super Gold Grandstand Covered',
+    description: 'Premium shaded grandstand at the Hungaroring with panoramic views of the main straight, pit lane, and podium ceremony.',
     price: 490,
     fee: 25,
     capacity: 250,
     availableQuantity: 250,
-    features: 'Covered Seating, Big Screen View, Etihad Park Concert Access, Theme Park Access',
+    features: 'Covered Seating, Giant Screen View, F1 Fanzone Access, Mobile Ticket Transfer',
     isAssignedSeating: true,
     deliveryType: 'instant_eticket' as const,
     status: 'available' as const,
@@ -271,22 +350,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
     active: true
   });
 
+  // Keep default eventId synced when events load from Firestore
+  useEffect(() => {
+    if (!ticketForm.eventId && events.length > 0) {
+      setTicketForm((prev) => ({ ...prev, eventId: events[0].id }));
+    }
+  }, [events, ticketForm.eventId]);
+
   // Handle Save Event
   const handleSaveEvent = (e: React.FormEvent) => {
     e.preventDefault();
+    if (uploadingField) return;
     if (editingEvent) {
+      if (editingEvent.banner.startsWith('blob:')) {
+        setUploadError('Please wait for the Cloudinary image upload to finish before saving.');
+        return;
+      }
       updateEvent(editingEvent);
       setEditingEvent(null);
-      showToast(`Event "${editingEvent.name}" updated successfully.`);
+      setUploadError(null);
+      showToast(`Event "${editingEvent.name}" updated and saved to Firestore.`);
     }
   };
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventForm.name.trim()) return;
+    if (uploadingField || !eventForm.name.trim()) return;
+    if (eventForm.banner.startsWith('blob:')) {
+      setUploadError('Please wait for the Cloudinary image upload to finish before saving.');
+      return;
+    }
     createEvent(eventForm);
     setIsAddingEvent(false);
-    showToast(`Event "${eventForm.name}" created successfully.`);
+    setUploadError(null);
+    showToast(`Event "${eventForm.name}" created and saved to Firestore.`);
     // Reset form
     setEventForm({
       ...eventForm,
@@ -307,16 +404,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
   // Handle Save Ticket
   const handleSaveTicket = (e: React.FormEvent) => {
     e.preventDefault();
+    if (uploadingField) return;
     if (editingTicket) {
+      if (editingTicket.imageUrl?.startsWith('blob:')) {
+        setUploadError('Please wait for the Cloudinary image upload to finish before saving.');
+        return;
+      }
       updateTicket(editingTicket);
       setEditingTicket(null);
-      showToast(`Ticket "${editingTicket.name}" updated successfully.`);
+      setUploadError(null);
+      showToast(`Ticket "${editingTicket.name}" updated and saved to Firestore.`);
     }
   };
 
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ticketForm.name.trim()) return;
+    if (uploadingField || !ticketForm.name.trim()) return;
+    if (ticketForm.imageUrl.startsWith('blob:')) {
+      setUploadError('Please wait for the Cloudinary image upload to finish before saving.');
+      return;
+    }
+    const targetEventId = ticketForm.eventId || events[0]?.id || '';
+    if (!targetEventId) {
+      setUploadError('Please create a Grand Prix Event first before creating tickets.');
+      return;
+    }
     const featuresArray = ticketForm.features
       .split(',')
       .map((f) => f.trim())
@@ -324,15 +436,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
     createTicket({
       ...ticketForm,
+      eventId: targetEventId,
       features: featuresArray
     });
     setIsAddingTicket(false);
-    showToast(`Ticket "${ticketForm.name}" created successfully.`);
+    setUploadError(null);
+    showToast(`Ticket "${ticketForm.name}" created and saved to Firestore.`);
     setTicketForm({
       ...ticketForm,
       name: '',
       section: '',
-      price: 350
+      price: 350,
+      imageUrl: ''
     });
   };
 
@@ -519,12 +634,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
             <div>
               <label className="block text-[#64748B] font-bold uppercase tracking-wider mb-1.5">
-                Admin Username
+                Admin Email or Username
               </label>
               <input
                 type="text"
                 required
-                placeholder="mastrotickets"
+                placeholder="admin@mastrotickets.com or mastrotickets"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-[#111827] font-medium focus:border-[#123B67] focus:outline-none"
@@ -533,32 +648,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
             <div>
               <label className="block text-[#64748B] font-bold uppercase tracking-wider mb-1.5">
-                Admin Password
+                Password
               </label>
               <input
                 type="password"
                 required
-                placeholder="mastrotickets@123"
+                placeholder="Enter password"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-[#111827] font-medium focus:border-[#123B67] focus:outline-none"
               />
             </div>
 
-            <div className="p-3 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-[11px] text-[#64748B] space-y-1">
-              <div className="font-bold text-[#0B1F3A] flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-[#123B67]" />
-                <span>Default Credentials</span>
+            <button
+              type="submit"
+              disabled={isEmailAuthBusy || isGoogleAuthBusy}
+              className="w-full py-3 bg-[#123B67] hover:bg-[#1D5288] text-white font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md text-xs mt-2 flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {isEmailAuthBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>{isEmailAuthBusy ? 'Signing In...' : 'Sign In with Email & Password'}</span>
+            </button>
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#E2E8F0]" />
               </div>
-              <div className="font-mono text-slate-700">Username: <strong className="text-[#0B1F3A]">mastrotickets</strong></div>
-              <div className="font-mono text-slate-700">Password: <strong className="text-[#0B1F3A]">mastrotickets@123</strong></div>
+              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+                <span className="bg-white px-2 text-[#64748B] font-semibold">Or Continue With Google</span>
+              </div>
             </div>
 
             <button
-              type="submit"
-              className="w-full py-3 bg-[#123B67] hover:bg-[#1D5288] text-white font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md text-xs mt-2"
+              type="button"
+              disabled={isGoogleAuthBusy || isEmailAuthBusy}
+              onClick={handleAdminGoogleSignIn}
+              className="w-full py-2.5 bg-white hover:bg-[#F5F7FA] text-[#0B1F3A] border border-[#CBD5E1] font-bold rounded-lg transition-all cursor-pointer text-xs flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              Sign In to Admin Panel
+              {isGoogleAuthBusy ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#123B67]" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-[#15803D]" />
+              )}
+              <span>Sign In with Google</span>
             </button>
 
             <div className="text-center pt-2">
@@ -601,18 +732,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
           <span className="text-xs font-mono text-[#15803D] font-bold">ADMIN OPERATIONS</span>
         </div>
 
-        <div className="flex items-center gap-4 text-xs">
-          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-[#F5F7FA] border border-[#E2E8F0] text-[#64748B]">
-            <span className="w-2 h-2 rounded-full bg-[#15803D] animate-pulse" />
-            <span className="text-[#0B1F3A] font-medium">Stripe Live</span>
-            <span>·</span>
-            <span>Firestore Synced</span>
-          </div>
+        <div className="flex items-center gap-3 sm:gap-4 text-xs">
+          {!isFirebaseAdmin && (
+            <button
+              type="button"
+              onClick={handleAdminGoogleSignIn}
+              disabled={isGoogleAuthBusy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B1F3A] hover:bg-[#123B67] text-white font-semibold cursor-pointer transition-colors disabled:opacity-60"
+            >
+              {isGoogleAuthBusy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span>Connect Google Admin</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-2">
-            <span className="text-[#64748B] hidden md:inline font-mono">mastrotickets</span>
+            <span className="text-[#64748B] hidden md:inline font-mono">
+              {firebaseAuthEmail || 'mastrotickets'}
+            </span>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#123B67] text-white uppercase">
-              Administrator
+              {isFirebaseAdmin ? 'Verified Admin' : 'Administrator'}
             </span>
           </div>
 
@@ -1534,7 +1676,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                           </span>
                         </td>
                         <td className="p-3.5 font-bold text-[#15803D]">
-                          {disc.discountPercent ? `${disc.discountPercent}% OFF` : `€${disc.discountAmount} OFF`}
+                          {disc.discountPercent ? `${disc.discountPercent}% OFF` : `$${disc.discountAmount} OFF`}
                         </td>
                         <td className="p-3.5 font-mono text-[#64748B]">{formatPrice(disc.minSpend)}</td>
                         <td className="p-3.5 font-mono">
@@ -1852,13 +1994,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
                 <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-2xs">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm text-[#0B1F3A]">UAE Geolocation Currency</span>
+                    <span className="font-bold text-sm text-[#0B1F3A]">Budapest Operations & Pricing</span>
                     <span className="px-2 py-0.5 rounded bg-[#15803D]/10 text-[#15803D] text-[10px] font-bold uppercase">
                       Active
                     </span>
                   </div>
                   <p className="text-xs text-[#64748B]">
-                    Auto-probes IP location: UAE visitors receive AED; international visitors receive USD.
+                    Operating out of Budapest, Hungary (Europe/Budapest CET/CEST) with USD ($) Stripe checkout.
                   </p>
                 </div>
               </div>
@@ -1890,7 +2032,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   <input
                     type="text"
                     required
-                    placeholder="Formula 1 Abu Dhabi Grand Prix 2026"
+                    placeholder="Formula 1 Hungarian Grand Prix 2026"
                     value={eventForm.name}
                     onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
@@ -1901,7 +2043,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   <input
                     type="text"
                     required
-                    placeholder="Yas Marina Circuit"
+                    placeholder="Hungaroring"
                     value={eventForm.circuit}
                     onChange={(e) => setEventForm({ ...eventForm, circuit: e.target.value })}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
@@ -1915,7 +2057,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   <input
                     type="text"
                     required
-                    placeholder="Yas Island, Abu Dhabi"
+                    placeholder="Budapest, Hungary"
                     value={eventForm.location}
                     onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
@@ -1926,7 +2068,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   <input
                     type="text"
                     required
-                    placeholder="United Arab Emirates"
+                    placeholder="Hungary"
                     value={eventForm.country}
                     onChange={(e) => setEventForm({ ...eventForm, country: e.target.value })}
                     className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
@@ -1966,7 +2108,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   />
                 </div>
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Starting Price (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Starting Price ($)</label>
                   <input
                     type="number"
                     required
@@ -1977,15 +2119,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#64748B] font-bold mb-1">Banner Image URL</label>
-                <input
-                  type="text"
-                  required
-                  value={eventForm.banner}
-                  onChange={(e) => setEventForm({ ...eventForm, banner: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
-                />
+              <div className="space-y-2">
+                <label className="block text-[#64748B] font-bold">Event Banner Image (Cloudinary)</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#0B1F3A] hover:bg-[#123B67] text-white rounded-lg font-bold cursor-pointer shrink-0 transition-colors">
+                    {uploadingField === 'add_event_banner' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{uploadingField === 'add_event_banner' ? 'Uploading...' : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      className="hidden"
+                      disabled={uploadingField !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void handleCloudinaryUpload(file, 'mastrotickets/events', 'add_event_banner', (url) => {
+                          setEventForm((prev) => ({ ...prev, banner: url }));
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://res.cloudinary.com/..."
+                    value={eventForm.banner}
+                    onChange={(e) => setEventForm({ ...eventForm, banner: e.target.value })}
+                    className="flex-1 px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
+                  />
+                </div>
+                {uploadError && (
+                  <p className="text-[11px] text-red-600 font-medium">{uploadError}</p>
+                )}
+                {eventForm.banner && !eventForm.banner.startsWith('blob:') && (
+                  <div className="flex items-center gap-3 p-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg">
+                    <img
+                      src={eventForm.banner}
+                      alt="Banner preview"
+                      className="w-20 h-12 object-cover rounded border border-[#E2E8F0]"
+                    />
+                    <div className="text-[11px] text-[#475569] truncate">
+                      <div className="font-semibold text-[#0B1F3A] flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3 text-[#123B67]" />
+                        <span>Banner Preview</span>
+                      </div>
+                      <div className="truncate max-w-sm">{eventForm.banner}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2082,7 +2267,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   />
                 </div>
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Starting Price (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Starting Price ($)</label>
                   <input
                     type="number"
                     required
@@ -2105,15 +2290,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#64748B] font-bold mb-1">Banner Image URL</label>
-                <input
-                  type="text"
-                  required
-                  value={editingEvent.banner}
-                  onChange={(e) => setEditingEvent({ ...editingEvent, banner: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
-                />
+              <div className="space-y-2">
+                <label className="block text-[#64748B] font-bold">Event Banner Image (Cloudinary)</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#0B1F3A] hover:bg-[#123B67] text-white rounded-lg font-bold cursor-pointer shrink-0 transition-colors">
+                    {uploadingField === 'edit_event_banner' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{uploadingField === 'edit_event_banner' ? 'Uploading...' : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      className="hidden"
+                      disabled={uploadingField !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void handleCloudinaryUpload(file, 'mastrotickets/events', 'edit_event_banner', (url) => {
+                          setEditingEvent((prev) => (prev ? { ...prev, banner: url } : prev));
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://res.cloudinary.com/..."
+                    value={editingEvent.banner}
+                    onChange={(e) => setEditingEvent({ ...editingEvent, banner: e.target.value })}
+                    className="flex-1 px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
+                  />
+                </div>
+                {uploadError && (
+                  <p className="text-[11px] text-red-600 font-medium">{uploadError}</p>
+                )}
+                {editingEvent.banner && !editingEvent.banner.startsWith('blob:') && (
+                  <div className="flex items-center gap-3 p-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg">
+                    <img
+                      src={editingEvent.banner}
+                      alt="Banner preview"
+                      className="w-20 h-12 object-cover rounded border border-[#E2E8F0]"
+                    />
+                    <div className="text-[11px] text-[#475569] truncate">
+                      <div className="font-semibold text-[#0B1F3A] flex items-center gap-1">
+                        <ImageIcon className="w-3 h-3 text-[#123B67]" />
+                        <span>Banner Preview</span>
+                      </div>
+                      <div className="truncate max-w-sm">{editingEvent.banner}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2251,7 +2479,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Price (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Price ($)</label>
                   <input
                     type="number"
                     required
@@ -2261,7 +2489,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   />
                 </div>
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Fee (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Fee ($)</label>
                   <input
                     type="number"
                     required
@@ -2292,28 +2520,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#64748B] font-bold mb-1">Ticket Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      // Note: Logic to upload to Cloudinary would go here.
-                      // For now, storing as placeholder name or mock link
-                      setTicketForm({ ...ticketForm, imageUrl: URL.createObjectURL(file) });
-                    }
-                  }}
-                  className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[#64748B] font-bold">Ticket Image (Cloudinary)</label>
+                  {cloudinaryReady === false && (
+                    <span className="text-[10px] text-amber-700 font-medium">
+                      Set CLOUDINARY_* env vars to enable direct upload
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#0B1F3A] hover:bg-[#123B67] text-white rounded-lg font-bold cursor-pointer shrink-0 transition-colors">
+                    {uploadingField === 'add_ticket_image' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{uploadingField === 'add_ticket_image' ? 'Uploading...' : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      className="hidden"
+                      disabled={uploadingField !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void handleCloudinaryUpload(file, 'mastrotickets/tickets', 'add_ticket_image', (url) => {
+                          setTicketForm((prev) => ({ ...prev, imageUrl: url }));
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://res.cloudinary.com/... (auto-filled on upload)"
+                    value={ticketForm.imageUrl}
+                    onChange={(e) => setTicketForm({ ...ticketForm, imageUrl: e.target.value })}
+                    className="flex-1 px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
+                  />
+                </div>
+                {uploadError && (
+                  <p className="text-[11px] text-red-600 font-medium">{uploadError}</p>
+                )}
+                {ticketForm.imageUrl && !ticketForm.imageUrl.startsWith('blob:') && (
+                  <div className="flex items-center gap-3 p-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg">
+                    <img
+                      src={ticketForm.imageUrl}
+                      alt="Ticket preview"
+                      className="w-16 h-12 object-cover rounded border border-[#E2E8F0]"
+                    />
+                    <div className="text-[11px] text-[#475569] truncate">
+                      <div className="font-semibold text-[#0B1F3A]">Cloudinary Asset Linked</div>
+                      <div className="truncate max-w-sm">{ticketForm.imageUrl}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-[#64748B] font-bold mb-1">Features / Inclusions (comma-separated)</label>
                 <input
                   type="text"
-                  placeholder="Covered Roof, Giant Screen View, Etihad Park Concerts Access"
+                  placeholder="Covered Roof, Giant Screen View, F1 Fanzone Access"
                   value={ticketForm.features}
                   onChange={(e) => setTicketForm({ ...ticketForm, features: e.target.value })}
                   className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
@@ -2404,7 +2672,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Price (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Price ($)</label>
                   <input
                     type="number"
                     required
@@ -2414,7 +2682,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                   />
                 </div>
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Fee (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Fee ($)</label>
                   <input
                     type="number"
                     required
@@ -2445,21 +2713,54 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#64748B] font-bold mb-1">Ticket Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      // Note: Logic to upload to Cloudinary would go here.
-                      // For now, storing as placeholder name or mock link
-                      setEditingTicket({ ...editingTicket, imageUrl: URL.createObjectURL(file) });
-                    }
-                  }}
-                  className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
-                />
+              <div className="space-y-2">
+                <label className="block text-[#64748B] font-bold">Ticket Image (Cloudinary)</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#0B1F3A] hover:bg-[#123B67] text-white rounded-lg font-bold cursor-pointer shrink-0 transition-colors">
+                    {uploadingField === 'edit_ticket_image' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>{uploadingField === 'edit_ticket_image' ? 'Uploading...' : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      className="hidden"
+                      disabled={uploadingField !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        void handleCloudinaryUpload(file, 'mastrotickets/tickets', 'edit_ticket_image', (url) => {
+                          setEditingTicket((prev) => (prev ? { ...prev, imageUrl: url } : prev));
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://res.cloudinary.com/... (auto-filled on upload)"
+                    value={editingTicket.imageUrl || ''}
+                    onChange={(e) => setEditingTicket({ ...editingTicket, imageUrl: e.target.value })}
+                    className="flex-1 px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs"
+                  />
+                </div>
+                {uploadError && (
+                  <p className="text-[11px] text-red-600 font-medium">{uploadError}</p>
+                )}
+                {editingTicket.imageUrl && !editingTicket.imageUrl.startsWith('blob:') && (
+                  <div className="flex items-center gap-3 p-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg">
+                    <img
+                      src={editingTicket.imageUrl}
+                      alt="Ticket preview"
+                      className="w-16 h-12 object-cover rounded border border-[#E2E8F0]"
+                    />
+                    <div className="text-[11px] text-[#475569] truncate">
+                      <div className="font-semibold text-[#0B1F3A]">Cloudinary Asset Linked</div>
+                      <div className="truncate max-w-sm">{editingTicket.imageUrl}</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2698,7 +2999,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 <input
                   type="text"
                   required
-                  placeholder="Important Notice: Abu Dhabi Grand Prix 2026 Weekend Schedule"
+                  placeholder="Important Notice: Hungarian Grand Prix 2026 Weekend Schedule (Budapest)"
                   value={emailForm.subject}
                   onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
                   className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs font-semibold"
@@ -2710,7 +3011,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
                 <textarea
                   rows={5}
                   required
-                  placeholder="Dear valued attendee, your official Yas Marina Circuit covered grandstand pass is confirmed..."
+                  placeholder="Dear valued attendee, your official Hungaroring Budapest covered grandstand pass is confirmed..."
                   value={emailForm.bodyText}
                   onChange={(e) => setEmailForm({ ...emailForm, bodyText: e.target.value })}
                   className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-xs leading-relaxed"
@@ -2792,7 +3093,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ navigate, initialTab = '
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#64748B] font-bold mb-1">Min Spend (€)</label>
+                  <label className="block text-[#64748B] font-bold mb-1">Min Spend ($)</label>
                   <input
                     type="number"
                     value={discountForm.minSpend}

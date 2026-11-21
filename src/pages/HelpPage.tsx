@@ -13,28 +13,28 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
 
   const faqs = [
     {
-      q: 'How and when will I receive my Abu Dhabi Grand Prix tickets?',
-      a: 'All tickets issued by Mastrotickets are official, promoter-authorized electronic passes with secure 2D barcodes. Immediately upon payment verification, your e-tickets and tax invoice are delivered to your email and accessible in your customer account. You can present the digital barcode on your mobile smartphone at the Yas Marina Circuit turnstiles or print the PDF voucher.'
+      q: 'How and when will I receive my Hungarian Grand Prix tickets?',
+      a: 'All tickets issued by Mastrotickets are verified electronic passes delivered via Mobile Ticket Transfer or secure 2D barcoded e-tickets. Upon payment verification, your order confirmation and delivery instructions are sent to your email and accessible in your customer portal for entry at the Hungaroring in Budapest, Hungary.'
     },
     {
-      q: 'Are Yasalam After-Race Concerts included with my race ticket?',
-      a: 'Yes! All 3-Day Abu Dhabi Grand Prix tickets include complimentary access to all 4 nights of Yasalam After-Race Concerts at Etihad Park (Thursday, Friday, Saturday, and Sunday). Single-day ticket holders receive complimentary admission to that respective evening’s concert. Golden Circle front-of-stage fast-track upgrades can also be added.'
+      q: 'How do I get from central Budapest to the Hungaroring circuit?',
+      a: 'The Hungaroring is located in Mogyoród, approximately 20 km northeast of Budapest city center. Dedicated Formula 1 shuttle buses run throughout race weekend, and the H8 HÉV suburban railway connects Örs vezér tere directly to Kerepes and Szilasliget stations near the circuit.'
     },
     {
-      q: 'Is theme park access (Ferrari World, Warner Bros, SeaWorld) really included?',
-      a: 'Yes, 100%! All valid 3-day Abu Dhabi Grand Prix tickets purchased through Mastrotickets include complimentary access to Yas Island’s theme parks: Ferrari World Abu Dhabi (home of Formula Rossa), Warner Bros. World, SeaWorld Yas Island, and Yas Waterworld during the race weekend.'
+      q: 'What is included with 3-Day Weekend Passes and Hospitality packages?',
+      a: '3-Day Weekend Passes grant full Friday Practice, Saturday Qualifying, and Sunday Grand Prix entry to your chosen grandstand or general admission area, plus access to the Hungaroring F1 Fanzone and weekend entertainment.'
     },
     {
-      q: 'Are seats booked together guaranteed to be side-by-side?',
-      a: 'Yes. When booking multiple grandstand seats in the same transaction, our automated reservation engine allocates contiguous, side-by-side seats in the same row. You can also pick your preferred seats on our interactive Grandstand Map.'
+      q: 'Are multiple tickets booked together guaranteed to be seated side-by-side?',
+      a: 'Yes. When booking multiple grandstand tickets in the same order, our inventory engine reserves adjacent seats together whenever available in your selected grandstand category.'
     },
     {
       q: 'What is the refund and cancellation policy?',
       a: 'In accordance with Formula 1 promoter regulations and European consumer standards, confirmed tickets are non-cancellable except if the event is officially cancelled by the FIA/promoter. In the event of promoter cancellation, full refunds are automatically returned to your original payment method via Stripe.'
     },
     {
-      q: 'Can I pay in UAE Dirhams (AED) or USD / EUR?',
-      a: 'Yes. You can complete your order in AED, USD, or EUR using any major credit/debit card, Apple Pay, or Google Pay with zero foreign currency conversion surcharges.'
+      q: 'Which payment methods and currencies are accepted?',
+      a: 'You can complete your order securely using Visa, Mastercard, Apple Pay, or Google Pay via Stripe encrypted checkout with instant confirmation.'
     }
   ];
 
@@ -55,13 +55,13 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-white border border-[#E2E8F0] rounded-full text-xs font-bold text-[#123B67] uppercase mb-3 shadow-2xs">
             <ShieldCheck className="w-3.5 h-3.5 text-[#15803D]" />
-            <span>ABU DHABI GRAND PRIX SUPPORT & FAQ</span>
+            <span>BUDAPEST, HUNGARY · SUPPORT & FAQ</span>
           </div>
           <h1 className="font-sports font-black text-3xl sm:text-5xl text-[#0B1F3A] uppercase tracking-tight">
             How Can We <span className="text-[#123B67]">Assist You?</span>
           </h1>
           <p className="text-xs sm:text-sm text-[#64748B] mt-2 max-w-lg mx-auto">
-            Find answers regarding Yas Marina Circuit grandstands, Yasalam concerts, theme park perks, and ticket delivery.
+            Find answers regarding Hungaroring grandstands in Budapest, Hungary, VIP hospitality, circuit transfers, and mobile ticket delivery.
           </p>
         </div>
 
@@ -104,24 +104,24 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white border border-[#E2E8F0] rounded-xl p-6 sm:p-8 shadow-xs">
           <div>
             <h3 className="font-sports font-black text-xl text-[#0B1F3A] uppercase tracking-wide mb-2">
-              Abu Dhabi & Yas Island Concierge Desk
+              Budapest, Hungary Concierge Desk
             </h3>
             <p className="text-xs text-[#64748B] mb-6 leading-relaxed">
-              Our dedicated UAE customer concierge is on hand to assist with grandstand block allocations, Paddock Club™ suites, private yachts, and circuit transfers.
+              Our dedicated Budapest customer concierge is on hand to assist with Hungaroring grandstand allocations, Paddock Club™ suites, group bookings, and circuit transfers in Hungary.
             </p>
 
             <div className="space-y-3 text-xs text-[#475569]">
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-[#123B67] shrink-0 mt-0.5" />
-                <span>Yas Marina Circuit · Yas Island, Abu Dhabi, UAE</span>
+                <span>Hungaroring · Budapest, Hungary</span>
               </div>
               <div className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-[#123B67] shrink-0" />
-                <span>concierge@mastrotickets.ae</span>
+                <span>concierge@mastrotickets.co</span>
               </div>
               <div className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-[#123B67] shrink-0" />
-                <span>+971 (2) 659-9800 (Mon–Sun 09:00–20:00 GST)</span>
+                <span>+36 1 550 7400 (Mon–Sun 09:00–20:00 CET)</span>
               </div>
             </div>
           </div>
@@ -135,11 +135,11 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
                   onChange={(e) => setContactSubject(e.target.value)}
                   className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-[#111827] focus:border-[#123B67] focus:outline-none cursor-pointer"
                 >
-                  <option value="General Inquiry">General Abu Dhabi GP Inquiry</option>
-                  <option value="Seating & Grandstands">Yas Marina Grandstand Seating</option>
+                  <option value="General Inquiry">General Hungarian GP Inquiry</option>
+                  <option value="Seating & Grandstands">Hungaroring Grandstand Seating</option>
                   <option value="VIP Paddock Club">Formula 1 Paddock Club™</option>
-                  <option value="Yacht Hospitality">Yas Marina Superyacht Hospitality</option>
-                  <option value="Concerts & Parks">Yasalam Concerts & Theme Parks</option>
+                  <option value="VIP Hospitality">Budapest VIP Suite Hospitality</option>
+                  <option value="Concerts & Transfers">Budapest Concerts & Circuit Transfers</option>
                 </select>
               </div>
 
@@ -148,7 +148,7 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
                 <textarea
                   rows={4}
                   required
-                  placeholder="How can our Abu Dhabi race concierge help you today?..."
+                  placeholder="How can our Budapest race concierge help you today?..."
                   value={contactMessage}
                   onChange={(e) => setContactMessage(e.target.value)}
                   className="w-full px-3 py-2 bg-[#F5F7FA] border border-[#E2E8F0] rounded-lg text-[#111827] focus:border-[#123B67] focus:outline-none"
@@ -165,7 +165,7 @@ export const HelpPage: React.FC<HelpPageProps> = ({ navigate }) => {
               {submitted && (
                 <div className="p-2.5 bg-[#15803D]/10 border border-[#15803D]/20 rounded-lg text-xs text-[#15803D] flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Message sent! Our Yas concierge will reply within 30 minutes.</span>
+                  <span>Message sent! Our Budapest concierge will reply within 30 minutes.</span>
                 </div>
               )}
             </form>

@@ -31,7 +31,7 @@ class HealthController
             'timestamp' => date('c'),
             'checks' => [
                 'database' => $dbStatus,
-                'currency' => 'AED',
+                'currency' => 'USD',
                 'php_version' => PHP_VERSION,
             ],
             'notes' => $dbError ? ['db' => $dbError] : null,

@@ -60,6 +60,37 @@
   background: #94A3B8;
 }
 
+@keyframes mastro-marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.mastro-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: mastro-marquee 32s linear infinite;
+}
+
+.mastro-marquee-track-slow {
+  animation-duration: 38s;
+}
+
+.mastro-marquee-container:hover .mastro-marquee-track,
+.mastro-marquee-container:focus-within .mastro-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mastro-marquee-track {
+    animation: none;
+  }
+}
+
 @media print {
   body {
     background: white !important;

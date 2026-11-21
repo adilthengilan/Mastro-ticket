@@ -124,7 +124,7 @@ In your Stripe Dashboard:
 |---|---|---|
 | `GET` | `/api/v1/health` | Health & database status check |
 | `GET` | `/api/v1/events` | Published Grand Prix events |
-| `GET` | `/api/v1/events/{id}` | Event details with ticket tiers & pricing in AED |
+| `GET` | `/api/v1/events/{id}` | Event details with ticket tiers & pricing in USD |
 | `GET` | `/api/v1/tickets` | Ticket inventory filterable by category and race day |
 | `GET` | `/api/v1/tickets/verify/{ticketNumber}` | Public ticket verification with redacted customer PII |
 | `POST` | `/api/v1/checkout/session` | Create atomic 10-minute hold & Stripe Checkout session |
@@ -133,6 +133,6 @@ In your Stripe Dashboard:
 | `GET` | `/api/v1/orders/{id}` | Fetch confirmed order by ID or order number |
 | `GET` | `/api/v1/orders/session/{sessionId}` | Fetch order by Stripe session ID |
 | `POST` | `/api/v1/admin/login` | Secure admin login returning JWT |
-| `GET` | `/api/v1/admin/dashboard` | Aggregated revenue (AED), orders, tickets sold |
+| `GET` | `/api/v1/admin/dashboard` | Aggregated revenue (USD), orders, tickets sold |
 | `GET` | `/api/v1/admin/orders` | Paginated orders with search |
 | `POST` | `/api/v1/admin/tickets/void` | Administrative ticket voiding with audit log |

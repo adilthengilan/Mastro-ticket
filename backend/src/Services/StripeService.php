@@ -25,7 +25,7 @@ class StripeService
     public static function createCheckoutSession(array $params): array
     {
         $secretKey = self::getSecretKey();
-        $currency = strtolower($params['currency'] ?? 'aed');
+        $currency = strtolower($params['currency'] ?? 'usd');
         $frontendUrl = rtrim(Env::get('FRONTEND_URL', 'https://mastrotickets.co'), '/');
 
         $lineItems = [];
@@ -41,7 +41,7 @@ class StripeService
         $payload = array_merge($lineItems, [
             'mode' => 'payment',
             'success_url' => "{$frontendUrl}/booking-confirmation?session_id={CHECKOUT_SESSION_ID}",
-            'cancel_url' => "{$frontendUrl}/checkout?status=cancelled",
+            'cancel_url' => "{$frontendUrl}/checkout?status=cancelled&reservation_id=" . urlencode((string)($params['reservationId'] ?? '')),
             'customer_email' => $params['customerEmail'] ?? '',
             'client_reference_id' => $params['reservationId'] ?? '',
             'metadata[reservation_id]' => $params['reservationId'] ?? '',
@@ -148,7 +148,7 @@ class StripeService
             $customerEmail = $session['customer_details']['email'] ?? $metadata['customer_email'] ?? '';
             $customerName = $session['customer_details']['name'] ?? $metadata['customer_name'] ?? 'MastroTickets Guest';
             $amountTotal = ((float)($session['amount_total'] ?? 0)) / 100;
-            $currency = strtoupper($session['currency'] ?? 'AED');
+            $currency = strtoupper($session['currency'] ?? 'USD');
             $paymentIntentId = $session['payment_intent'] ?? $sessionId;
 
             // Check if order already processed for this session
@@ -187,7 +187,7 @@ class StripeService
                 'cname' => $customerName,
                 'cemail' => $customerEmail,
                 'cphone' => $session['customer_details']['phone'] ?? '',
-                'ccountry' => $session['customer_details']['address']['country'] ?? 'AE',
+                'ccountry' => $session['customer_details']['address']['country'] ?? 'HU',
                 'billing' => json_encode($session['customer_details']['address'] ?? []),
                 'items' => json_encode($items),
                 'sub' => $amountTotal,
@@ -212,7 +212,7 @@ class StripeService
                 $qty = (int)$item['quantity'];
                 for ($k = 0; $k < $qty; $k++) {
                     $ticketId = 'tkt_' . bin2hex(random_bytes(8));
-                    $ticketNum = TicketNumberGenerator::generate('ABU26');
+                    $ticketNum = TicketNumberGenerator::generate('HUN26');
                     $barcode = 'BAR' . strtoupper(bin2hex(random_bytes(6)));
                     $qrVal = "https://mastrotickets.co/verify?ticket={$ticketNum}";
 
@@ -248,16 +248,25 @@ class StripeService
                 $upRes->execute(['id' => $reservationId]);
             }
 
-            // Queue Order Confirmation & Ticket Delivery Email
+            // Queue MastroTickets Order Confirmation & Mobile Ticket Transfer Email
+            $primaryItem = $items[0] ?? [];
             EmailService::queue(
                 $customerEmail,
                 $customerName,
-                'ticket_delivery',
-                "Your MastroTickets Booking is Confirmed - {$orderNumber}",
+                'order_confirmation',
+                "Your order with order ID {$orderNumber} is confirmed",
                 [
                     'orderNumber' => $orderNumber,
                     'customerName' => $customerName,
-                    'total' => "{$currency} " . number_format($amountTotal, 2),
+                    'recipientEmail' => $customerEmail,
+                    'eventName' => $primaryItem['event_name'] ?? 'Formula 1 Grand Prix Event',
+                    'venue' => $primaryItem['circuit'] ?? 'Hungaroring, Budapest',
+                    'eventDate' => $primaryItem['race_day'] ?? 'Date & Time to be Confirmed',
+                    'section' => $primaryItem['section'] ?? ($primaryItem['ticket_name'] ?? 'Grandstand'),
+                    'row' => '',
+                    'ticketCount' => count($issuedTickets),
+                    'paymentMethod' => 'Stripe Card Payment',
+                    'total' => '$' . number_format($amountTotal, 2),
                     'tickets' => $issuedTickets,
                 ],
                 $orderId

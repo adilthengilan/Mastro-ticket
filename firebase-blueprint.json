@@ -1,0 +1,304 @@
+{
+  "entities": {
+    "Event": {
+      "title": "Grand Prix Event",
+      "description": "Formula 1 Grand Prix event listing with Hungaroring/circuit details and Cloudinary banner URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "maxLength": 160, "pattern": "^[a-z0-9\\-]+$" },
+        "name": { "type": "string", "maxLength": 200 },
+        "officialTitle": { "type": "string", "maxLength": 240 },
+        "circuit": { "type": "string", "maxLength": 160 },
+        "location": { "type": "string", "maxLength": 160 },
+        "country": { "type": "string", "maxLength": 100 },
+        "countryCode": { "type": "string", "maxLength": 8 },
+        "flag": { "type": "string", "maxLength": 16 },
+        "dates": { "type": "string", "maxLength": 100 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "round": { "type": "number" },
+        "season": { "type": "number" },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "banner": { "type": "string", "maxLength": 1000 },
+        "description": { "type": "string", "maxLength": 4000 },
+        "status": { "type": "string", "enum": ["published", "draft", "archived"] },
+        "startingPrice": { "type": "number" },
+        "featured": { "type": "boolean" },
+        "lapDistance": { "type": "string", "maxLength": 32 },
+        "numberOfLaps": { "type": "number" },
+        "raceDistance": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "slug", "name", "circuit", "location", "country", "status", "startingPrice"]
+    },
+    "Ticket": {
+      "title": "Ticket Category",
+      "description": "Ticket category with live available inventory, pricing in USD, and Cloudinary image URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "category": { "type": "string", "enum": ["grandstand", "general_admission", "vip_hospitality", "weekend_bundle", "concert"] },
+        "raceDay": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 200 },
+        "section": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "fee": { "type": "number" },
+        "capacity": { "type": "number" },
+        "availableQuantity": { "type": "number" },
+        "isAssignedSeating": { "type": "boolean" },
+        "deliveryType": { "type": "string", "enum": ["instant_eticket", "mobile_pass", "courier"] },
+        "status": { "type": "string", "enum": ["available", "low_inventory", "sold_out"] },
+        "maxPerOrder": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "eventId", "category", "raceDay", "name", "section", "price", "fee", "capacity", "availableQuantity", "status", "maxPerOrder"]
+    },
+    "Category": {
+      "title": "Category Definition",
+      "description": "Ticket category metadata for storefront and admin filtering.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 120 },
+        "slug": { "type": "string", "maxLength": 120, "pattern": "^[a-z0-9_\\-]+$" },
+        "description": { "type": "string", "maxLength": 500 },
+        "badgeColor": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "Concert": {
+      "title": "Concert Pass",
+      "description": "Post-race concert pass linked to a Grand Prix event with Cloudinary image URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 200 },
+        "artist": { "type": "string", "maxLength": 160 },
+        "date": { "type": "string", "maxLength": 64 },
+        "time": { "type": "string", "maxLength": 64 },
+        "venue": { "type": "string", "maxLength": 200 },
+        "image": { "type": "string", "maxLength": 1000 },
+        "price": { "type": "number" },
+        "description": { "type": "string", "maxLength": 2000 },
+        "entryConditions": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "eventId", "name", "artist", "price"]
+    },
+    "PremiumPackage": {
+      "title": "Premium Hospitality Package",
+      "description": "VIP hospitality or Paddock Club package with Cloudinary image URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 200 },
+        "tier": { "type": "string", "maxLength": 80 },
+        "price": { "type": "number" },
+        "daysIncluded": { "type": "string", "maxLength": 120 },
+        "image": { "type": "string", "maxLength": 1000 },
+        "description": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["id", "eventId", "name", "tier", "price"]
+    },
+    "Discount": {
+      "title": "Discount Code",
+      "description": "Promotional discount code applied during checkout.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "code": { "type": "string", "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "discountPercent": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "minSpend": { "type": "number" },
+        "maxUsage": { "type": "number" },
+        "usedCount": { "type": "number" },
+        "validUntil": { "type": "string", "maxLength": 32 },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "code", "minSpend", "maxUsage", "usedCount", "validUntil", "active"]
+    },
+    "Reservation": {
+      "title": "Inventory Reservation",
+      "description": "Temporary 10-minute atomic inventory hold preventing overselling.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reservationReference": { "type": "string", "maxLength": 64 },
+        "eventId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerEmail": { "type": "string", "maxLength": 254 },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD"] },
+        "status": { "type": "string", "enum": ["active", "confirmed", "expired", "released"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reservationReference", "customerId", "eventId", "items", "total", "currency", "status", "createdAt", "expiresAt"]
+    },
+    "Order": {
+      "title": "Customer Order",
+      "description": "Confirmed ticket booking with issued barcodes, billing info, and payment metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderNumber": { "type": "string", "maxLength": 64 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "isGuestOrder": { "type": "boolean" },
+        "customerName": { "type": "string", "maxLength": 200 },
+        "customerEmail": { "type": "string", "maxLength": 254 },
+        "customerPhone": { "type": "string", "maxLength": 40 },
+        "customerCountry": { "type": "string", "maxLength": 100 },
+        "subtotal": { "type": "number" },
+        "serviceFee": { "type": "number" },
+        "tax": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD"] },
+        "status": { "type": "string", "enum": ["draft", "pending_payment", "paid", "confirmed", "partially_refunded", "refunded", "cancelled", "payment_failed", "expired"] },
+        "paymentMethod": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderNumber", "customerId", "customerName", "customerEmail", "total", "currency", "status", "createdAt"]
+    },
+    "EmailJob": {
+      "title": "Transactional Email Log",
+      "description": "Record of order confirmation and notification emails.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "recipientEmail": { "type": "string", "maxLength": 254 },
+        "recipientName": { "type": "string", "maxLength": 200 },
+        "template": { "type": "string", "maxLength": 64 },
+        "subject": { "type": "string", "maxLength": 300 },
+        "bodyText": { "type": "string", "maxLength": 12000 },
+        "status": { "type": "string", "enum": ["delivered", "pending", "failed"] },
+        "sentAt": { "type": "string", "format": "date-time" },
+        "retryCount": { "type": "number" }
+      },
+      "required": ["id", "recipientEmail", "recipientName", "template", "subject", "status", "sentAt"]
+    },
+    "InventoryLedgerEntry": {
+      "title": "Inventory Ledger Entry",
+      "description": "Immutable inventory stock delta record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "maxLength": 64 },
+        "ticketTypeId": { "type": "string", "maxLength": 128 },
+        "ticketName": { "type": "string", "maxLength": 200 },
+        "quantityDelta": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "referenceId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["id", "timestamp", "type", "ticketTypeId", "ticketName", "quantityDelta", "previousStock", "newStock", "referenceId", "notes"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Administrative and booking audit trail.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 254 },
+        "actorRole": { "type": "string", "maxLength": 32 },
+        "action": { "type": "string", "maxLength": 80 },
+        "targetRecord": { "type": "string", "maxLength": 160 },
+        "changeSummary": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorId", "action", "targetRecord", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "Customer Profile",
+      "description": "Private customer profile isolated to owner and admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "displayName": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "country": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["customer", "admin"] },
+        "emailVerified": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "displayName", "role"]
+    },
+    "AdminRecord": {
+      "title": "Admin Role Record",
+      "description": "Server/console-managed admin allowlist keyed by Firebase UID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/Event" },
+      "description": "Publicly readable Grand Prix events; admin-only writes."
+    },
+    "/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/Ticket" },
+      "description": "Publicly readable ticket categories and real-time inventory; admin writes and atomic reservation stock updates."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Publicly readable ticket categories; admin-only writes."
+    },
+    "/concerts/{concertId}": {
+      "schema": { "$ref": "#/entities/Concert" },
+      "description": "Publicly readable post-race concerts; admin-only writes."
+    },
+    "/premiumPackages/{packageId}": {
+      "schema": { "$ref": "#/entities/PremiumPackage" },
+      "description": "Publicly readable VIP hospitality packages; admin-only writes."
+    },
+    "/discounts/{discountId}": {
+      "schema": { "$ref": "#/entities/Discount" },
+      "description": "Promo codes readable for validation; admin writes and checkout usedCount increment."
+    },
+    "/reservations/{reservationId}": {
+      "schema": { "$ref": "#/entities/Reservation" },
+      "description": "Atomic 10-minute ticket holds preventing concurrent overselling."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders isolated to order owner and admins; guest checkout creates confirmed orders."
+    },
+    "/emailJobs/{jobId}": {
+      "schema": { "$ref": "#/entities/EmailJob" },
+      "description": "Transactional email logs readable only by admins."
+    },
+    "/inventoryLedger/{entryId}": {
+      "schema": { "$ref": "#/entities/InventoryLedgerEntry" },
+      "description": "Append-only stock movement ledger readable only by admins."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Append-only operational audit trail readable only by admins."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private customer profile isolated strictly to the owning user or admin."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role registry; read-only for the user's own doc, write-locked to console/Admin SDK."
+    }
+  }
+}

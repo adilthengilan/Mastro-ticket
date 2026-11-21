@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useStore } from '../services/store';
-import { CurrencyCode, UserRole } from '../types';
 import {
   ShoppingBag,
   Search,
@@ -9,7 +8,9 @@ import {
   User,
   ShieldCheck,
   Ticket,
-  ChevronDown
+  ChevronDown,
+  LogOut,
+  LogIn
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -19,32 +20,16 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSearch }) => {
-  const { cart, currency, setCurrency, currentUser, setCurrentUser } = useStore();
+  const { cart, currentUser, isAuthenticated, logoutUser } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleRoleChange = (role: UserRole) => {
-    setCurrentUser({
-      ...currentUser,
-      role,
-      displayName:
-        role === 'admin'
-          ? 'Alex Kovács (Admin)'
-          : role === 'inventory_manager'
-          ? 'Márton Szabó (Inventory)'
-          : role === 'support_agent'
-          ? 'Anna Nagy (Support)'
-          : 'Adil Thengilan'
-    });
-    setAccountMenuOpen(false);
-  };
-
   const navLinks = [
     { label: 'Grand Prix', path: '/races' },
-    { label: 'Race Calendar', path: '/races/abu-dhabi-grand-prix-2026' },
+    { label: 'Race Calendar', path: '/races/hungarian-grand-prix-2026' },
     { label: 'Concerts', path: '/#concerts' },
     { label: 'Premium Experiences', path: '/#premium' },
     { label: 'Verify Pass', path: '/ticket-enquiry' }
@@ -137,18 +122,6 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
               <Search className="w-4 h-4" />
             </button>
 
-            {/* Currency Selector (AED / USD / EUR) */}
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-              className="bg-white text-xs font-semibold text-[#111827] border border-[#E2E8F0] rounded-full px-2.5 py-1.5 focus:border-[#0B1F3A] focus:outline-none cursor-pointer shadow-xs"
-              title="Select Currency"
-            >
-              <option value="AED">AED</option>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-            </select>
-
             {/* Shopping Cart Icon with Navy Badge */}
             <button
               onClick={() => navigate('/cart')}
@@ -167,13 +140,13 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
             <div className="relative">
               <button
                 onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-                className="flex items-center gap-1.5 py-1 px-2 sm:px-2.5 rounded-full bg-[#F5F7FA] hover:bg-[#E2E8F0] border border-[#E2E8F0] text-[#111827] transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-[#F5F7FA] hover:bg-[#E2E8F0] border border-[#E2E8F0] text-[#111827] transition-colors cursor-pointer"
               >
                 <div className="w-6 h-6 rounded-full bg-[#0B1F3A] flex items-center justify-center text-white text-[11px] font-bold">
-                  {currentUser.displayName.charAt(0)}
+                  {isAuthenticated ? currentUser.displayName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
                 </div>
-                <span className="hidden sm:inline font-medium text-xs max-w-[90px] truncate text-[#0B1F3A]">
-                  {currentUser.displayName.split(' ')[0]}
+                <span className="hidden sm:inline font-medium text-xs max-w-[96px] truncate text-[#0B1F3A]">
+                  {isAuthenticated ? currentUser.displayName.split(' ')[0] : 'Sign In'}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[#64748B]" />
               </button>
@@ -183,14 +156,44 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
                   className="absolute right-0 mt-2 w-64 bg-white border border-[#E2E8F0] rounded-xl shadow-xl py-2 z-50 text-xs text-[#111827]"
                   onMouseLeave={() => setAccountMenuOpen(false)}
                 >
-                  <div className="px-4 py-2 border-b border-[#E2E8F0]">
-                    <p className="text-[#0B1F3A] font-bold truncate">{currentUser.displayName}</p>
-                    <p className="text-[#64748B] text-[11px] truncate">{currentUser.email}</p>
-                    <div className="mt-1 flex items-center gap-1 text-[10px] text-[#15803D] font-medium">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span>Role: {currentUser.role.replace('_', ' ')}</span>
+                  {isAuthenticated ? (
+                    <div className="px-4 py-2 border-b border-[#E2E8F0]">
+                      <p className="text-[#0B1F3A] font-bold truncate">{currentUser.displayName}</p>
+                      <p className="text-[#64748B] text-[11px] truncate">{currentUser.email}</p>
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-[#15803D] font-medium">
+                        <ShieldCheck className="w-3 h-3" />
+                        <span>{currentUser.emailVerified ? 'Verified Customer' : 'Account Active'}</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="px-4 py-2.5 border-b border-[#E2E8F0]">
+                      <p className="text-[#0B1F3A] font-bold">Guest Mode</p>
+                      <p className="text-[#64748B] text-[11px] mt-0.5">
+                        Checkout anytime as guest, or sign in to sync orders.
+                      </p>
+                      <div className="mt-2.5 flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            navigate('/login');
+                            setAccountMenuOpen(false);
+                          }}
+                          className="flex-1 py-1.5 px-2.5 bg-[#0B1F3A] hover:bg-[#163A63] text-white font-semibold rounded-md text-center cursor-pointer transition-colors flex items-center justify-center gap-1"
+                        >
+                          <LogIn className="w-3 h-3" />
+                          <span>Sign In</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigate('/register');
+                            setAccountMenuOpen(false);
+                          }}
+                          className="flex-1 py-1.5 px-2.5 bg-[#F5F7FA] hover:bg-[#E2E8F0] text-[#0B1F3A] border border-[#E2E8F0] font-semibold rounded-md text-center cursor-pointer transition-colors"
+                        >
+                          Register
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="py-1">
                     <button
@@ -198,10 +201,10 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
                         navigate('/account');
                         setAccountMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-[#111827] hover:bg-[#F5F7FA] transition-colors flex items-center gap-2 font-medium"
+                      className="w-full text-left px-4 py-2 text-[#111827] hover:bg-[#F5F7FA] transition-colors flex items-center gap-2 font-medium cursor-pointer"
                     >
                       <Ticket className="w-3.5 h-3.5 text-[#123B67]" />
-                      <span>My Orders & E-Tickets</span>
+                      <span>{isAuthenticated ? 'My Orders & E-Tickets' : 'Guest Orders & Account'}</span>
                     </button>
                     
                     <button
@@ -209,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
                         navigate('/ticket-enquiry');
                         setAccountMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-[#111827] hover:bg-[#F5F7FA] transition-colors flex items-center gap-2 font-medium"
+                      className="w-full text-left px-4 py-2 text-[#111827] hover:bg-[#F5F7FA] transition-colors flex items-center gap-2 font-medium cursor-pointer"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-[#15803D]" />
                       <span>Verify Pass Authenticity</span>
@@ -220,38 +223,25 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
                         navigate('/admin');
                         setAccountMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-[#123B67] hover:bg-[#F5F7FA] font-semibold transition-colors flex items-center gap-2"
+                      className="w-full text-left px-4 py-2 text-[#123B67] hover:bg-[#F5F7FA] font-semibold transition-colors flex items-center gap-2 cursor-pointer"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-[#123B67]" />
                       <span>Admin Operations Portal</span>
                     </button>
-                  </div>
 
-                  <div className="px-4 py-2 border-t border-[#E2E8F0] bg-[#F5F7FA]">
-                    <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-1">
-                      Role Switcher
-                    </p>
-                    <div className="grid grid-cols-2 gap-1 text-[11px]">
-                      {(['customer', 'admin', 'inventory_manager', 'support_agent'] as UserRole[]).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => handleRoleChange(r)}
-                          className={`px-2 py-1 rounded text-left truncate transition-colors ${
-                            currentUser.role === r
-                              ? 'bg-[#123B67] text-white font-semibold'
-                              : 'text-[#475569] hover:bg-[#E2E8F0]'
-                          }`}
-                        >
-                          {r === 'admin'
-                            ? 'Admin'
-                            : r === 'customer'
-                            ? 'Customer'
-                            : r === 'inventory_manager'
-                            ? 'Inventory'
-                            : 'Support'}
-                        </button>
-                      ))}
-                    </div>
+                    {isAuthenticated && (
+                      <button
+                        onClick={() => {
+                          logoutUser();
+                          setAccountMenuOpen(false);
+                          navigate('/');
+                        }}
+                        className="w-full text-left px-4 py-2 text-[#B91C1C] hover:bg-red-50 font-medium transition-colors flex items-center gap-2 border-t border-[#E2E8F0] mt-1 pt-2 cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Logout</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -306,7 +296,36 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
               </button>
             ))}
 
-            <div className="pt-3 border-t border-[#E2E8F0] flex flex-col gap-1">
+            <div className="pt-3 border-t border-[#E2E8F0] flex flex-col gap-1.5">
+              {!isAuthenticated ? (
+                <div className="grid grid-cols-2 gap-2 pb-2">
+                  <button
+                    onClick={() => {
+                      navigate('/login');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[#0B1F3A] text-white font-semibold"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate('/register');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[#F5F7FA] border border-[#E2E8F0] text-[#0B1F3A] font-semibold"
+                  >
+                    <span>Register</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="px-3 py-2 rounded-lg bg-[#F5F7FA] border border-[#E2E8F0] mb-1">
+                  <p className="font-bold text-[#0B1F3A] truncate">{currentUser.displayName}</p>
+                  <p className="text-[11px] text-[#64748B] truncate">{currentUser.email}</p>
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   navigate('/account');
@@ -315,18 +334,32 @@ export const Header: React.FC<HeaderProps> = ({ currentPath, navigate, onOpenSea
                 className="flex items-center gap-3 py-2.5 px-3 rounded text-[#111827] hover:bg-[#F5F7FA]"
               >
                 <Ticket className="w-4 h-4 text-[#123B67]" />
-                <span>My Bookings & E-Tickets</span>
+                <span>{isAuthenticated ? 'My Bookings & E-Tickets' : 'Guest Orders & Account'}</span>
               </button>
               <button
                 onClick={() => {
-                  navigate('/admin-panel/home');
+                  navigate('/admin');
                   setMobileMenuOpen(false);
                 }}
                 className="flex items-center gap-3 py-2.5 px-3 rounded text-[#123B67] bg-[#F5F7FA]"
               >
                 <ShieldCheck className="w-4 h-4 text-[#123B67]" />
-                <span className="font-semibold">Admin Panel</span>
+                <span className="font-semibold">Admin Operations Portal</span>
               </button>
+
+              {isAuthenticated && (
+                <button
+                  onClick={() => {
+                    logoutUser();
+                    setMobileMenuOpen(false);
+                    navigate('/');
+                  }}
+                  className="flex items-center gap-3 py-2.5 px-3 rounded text-[#B91C1C] hover:bg-red-50 font-medium"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

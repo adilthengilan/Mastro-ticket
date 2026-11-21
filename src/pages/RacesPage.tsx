@@ -78,13 +78,13 @@ export const RacesPage: React.FC<RacesPageProps> = ({ navigate, initialSearch = 
         {/* Page Title */}
         <div className="mb-8">
           <div className="text-xs font-bold text-[#163A63] uppercase tracking-widest mb-1">
-            YAS MARINA CIRCUIT · ABU DHABI GRAND PRIX 2026
+            HUNGARORING · BUDAPEST, HUNGARY · GRAND PRIX 2026
           </div>
           <h1 className="font-sports font-black text-3xl sm:text-5xl text-[#0B1F3A] uppercase tracking-tight">
             Grand Prix <span className="text-[#123B67]">Race Directory</span>
           </h1>
           <p className="text-xs sm:text-sm text-[#64748B] mt-2 max-w-2xl leading-relaxed">
-            Official promoter-authorized tickets, covered grandstands, and VIP hospitality passes for the Formula 1 Etihad Airways Abu Dhabi Grand Prix season finale and world championship calendar.
+            Official promoter-authorized tickets, covered grandstands, and VIP hospitality passes for the Formula 1 Hungarian Grand Prix at the Hungaroring in Budapest and the world championship calendar.
           </p>
         </div>
 

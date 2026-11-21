@@ -30,7 +30,7 @@ export const PremiumSection: React.FC<PremiumSectionProps> = ({ navigate }) => {
             VIP & Paddock Hospitality
           </h2>
           <p className="text-xs sm:text-sm text-[#64748B] mt-1 leading-relaxed font-sans">
-            Authorized Formula 1 Paddock Club™, air-conditioned trackside suites, gourmet dining, open bars, and private yacht berths overlooking Yas Marina.
+            Authorized Formula 1 Paddock Club™, climate-controlled trackside suites, gourmet dining, open bars, and panoramic terraces overlooking the Hungaroring in Budapest, Hungary.
           </p>
         </div>
 

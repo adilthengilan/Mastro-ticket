@@ -14,6 +14,72 @@ use Exception;
 class CheckoutController
 {
     /**
+     * POST /api/v1/reservations
+     * Atomically validate stock and hold tickets for 10 minutes before checkout
+     */
+    public function createReservation(Request $request): void
+    {
+        $body = $request->getBody() ?? [];
+        $eventId = trim((string)($body['eventId'] ?? ''));
+        $items = $body['items'] ?? [];
+        $customerEmail = trim((string)($body['customerEmail'] ?? ''));
+        $previousReservationId = trim((string)($body['previousReservationId'] ?? ''));
+        $idempotencyKey = isset($body['idempotencyKey']) ? trim((string)$body['idempotencyKey']) : null;
+
+        if ($eventId === '') {
+            Response::validationError(['eventId' => 'Event ID is required']);
+        }
+        if (empty($items) || !is_array($items)) {
+            Response::validationError(['items' => 'Ticket selection items are required']);
+        }
+
+        try {
+            if ($previousReservationId !== '') {
+                ReservationService::releaseReservation($previousReservationId, 'replaced_by_new_selection');
+            }
+
+            $reservation = ReservationService::createReservation(
+                $eventId,
+                $items,
+                $customerEmail,
+                'USD',
+                $idempotencyKey ?: null
+            );
+
+            Response::success($reservation, 'Tickets reserved for 10 minutes', 201);
+        } catch (\Throwable $e) {
+            $code = (int)$e->getCode();
+            if ($code === ReservationService::ERR_INSUFFICIENT_INVENTORY) {
+                Response::error($e->getMessage(), 409, null, 'INSUFFICIENT_INVENTORY');
+            }
+            if ($code === ReservationService::ERR_VALIDATION) {
+                Response::error($e->getMessage(), 422, null, 'VALIDATION_FAILED');
+            }
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * POST /api/v1/reservations/{id}/release
+     * Idempotently release an active reservation back to live stock
+     */
+    public function releaseReservation(Request $request, string $reservationId): void
+    {
+        $body = $request->getBody() ?? [];
+        $reason = trim((string)($body['reason'] ?? 'released'));
+
+        try {
+            $released = ReservationService::releaseReservation($reservationId, $reason);
+            Response::success(
+                ['reservationId' => $reservationId, 'released' => $released],
+                $released ? 'Reservation released and inventory restored.' : 'Reservation already released or expired.'
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    /**
      * POST /api/v1/checkout/session
      */
     public function createSession(Request $request): void
@@ -25,6 +91,8 @@ class CheckoutController
         $customerEmail = trim($body['customerEmail'] ?? '');
         $customerName = trim($body['customerName'] ?? 'Guest Customer');
         $discountCode = trim($body['discountCode'] ?? '');
+        $existingReservationId = trim((string)($body['reservationId'] ?? ''));
+        $idempotencyKey = isset($body['idempotencyKey']) ? trim((string)$body['idempotencyKey']) : null;
 
         if (empty($eventId)) {
             Response::validationError(['eventId' => 'Event ID is required']);
@@ -38,9 +106,29 @@ class CheckoutController
             Response::validationError(['customerEmail' => 'A valid customer email is required']);
         }
 
+        $createdFreshReservation = false;
+        $reservation = null;
+
         try {
-            // 1. Create atomic 10-minute hold reservation in DB
-            $reservation = ReservationService::createReservation($eventId, $items, $customerEmail, 'AED');
+            // 1. Reuse existing valid active reservation (never double-deduct stock) or create fresh atomic hold
+            if ($existingReservationId !== '') {
+                $reservation = ReservationService::getValidActiveReservation($existingReservationId, $items, $customerEmail);
+                if (!$reservation) {
+                    // Release stale/mismatched previous hold before creating a clean hold
+                    ReservationService::releaseReservation($existingReservationId, 'replaced_at_checkout');
+                }
+            }
+
+            if (!$reservation) {
+                $reservation = ReservationService::createReservation(
+                    $eventId,
+                    $items,
+                    $customerEmail,
+                    'USD',
+                    $idempotencyKey ?: null
+                );
+                $createdFreshReservation = empty($reservation['reused']);
+            }
 
             // 2. Validate discount if provided
             $discountAmount = 0.00;
@@ -63,7 +151,7 @@ class CheckoutController
 
             // 3. Create Stripe Checkout Session
             $stripeSession = StripeService::createCheckoutSession([
-                'currency' => 'AED',
+                'currency' => 'USD',
                 'items' => $reservation['items'],
                 'customerEmail' => $customerEmail,
                 'customerName' => $customerName,
@@ -82,9 +170,25 @@ class CheckoutController
                 'subtotal' => $reservation['total'],
                 'discount' => $discountAmount,
                 'total' => $finalTotal,
-                'currency' => 'AED',
+                'currency' => 'USD',
             ], 'Checkout session created successfully');
         } catch (\Throwable $e) {
+            // Release reservation immediately if Stripe session initialization failed
+            if ($createdFreshReservation && !empty($reservation['reservationId'])) {
+                try {
+                    ReservationService::releaseReservation($reservation['reservationId'], 'payment_initialization_failed');
+                } catch (\Throwable $releaseErr) {
+                    // Log silently and return primary error
+                }
+            }
+
+            $code = (int)$e->getCode();
+            if ($code === ReservationService::ERR_INSUFFICIENT_INVENTORY) {
+                Response::error($e->getMessage(), 409, null, 'INSUFFICIENT_INVENTORY');
+            }
+            if ($code === ReservationService::ERR_VALIDATION) {
+                Response::error($e->getMessage(), 422, null, 'VALIDATION_FAILED');
+            }
             Response::error($e->getMessage(), 400);
         }
     }
@@ -119,7 +223,7 @@ class CheckoutController
         }
 
         if ($subtotal < (float)$discount['min_spend']) {
-            Response::error("Minimum order spend of AED {$discount['min_spend']} required for this code", 422);
+            Response::error("Minimum order spend of \${$discount['min_spend']} required for this code", 422);
         }
 
         $calcDiscount = 0.00;
@@ -135,7 +239,7 @@ class CheckoutController
             'discountAmount' => $calcDiscount,
             'subtotal' => $subtotal,
             'newTotal' => max(0, $subtotal - $calcDiscount),
-            'currency' => 'AED',
+            'currency' => 'USD',
         ], 'Discount code applied successfully');
     }
 }

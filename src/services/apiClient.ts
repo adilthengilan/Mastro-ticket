@@ -17,35 +17,71 @@ export class ApiError extends Error {
   }
 }
 
+const PRODUCTION_API_HOSTS = ['mastrotickets.co', 'mastrotickets.ae'];
+const OFFLINE_BACKOFF_MS = 30000;
+
+function resolveApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (configured) {
+    return configured.replace(/\/+$/, '');
+  }
+
+  // Only default to the hosted production PHP API when running on an official MastroTickets domain
+  if (typeof window !== 'undefined') {
+    const hostname = (window.location.hostname || '').toLowerCase();
+    const isProductionDomain = PRODUCTION_API_HOSTS.some(
+      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+    );
+    if (isProductionDomain) {
+      return 'https://api.mastrotickets.co/api/v1';
+    }
+  }
+
+  // In local dev / preview without VITE_API_BASE_URL configured, stay offline-safe
+  return '';
+}
+
 class ApiClient {
   private baseUrl: string;
+  private memoryToken: string | null = null;
+  private offlineUntil = 0;
 
   constructor() {
-    this.baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://api.mastrotickets.co/api/v1').replace(/\/+$/, '');
+    this.baseUrl = resolveApiBaseUrl();
   }
 
   public getBaseUrl(): string {
     return this.baseUrl;
   }
 
+  public isRemoteConfigured(): boolean {
+    if (!this.baseUrl) return false;
+    if (Date.now() < this.offlineUntil) return false;
+    return true;
+  }
+
   public getToken(): string | null {
+    if (this.memoryToken) return this.memoryToken;
     try {
-      return localStorage.getItem(TOKEN_KEY);
+      return sessionStorage.getItem(TOKEN_KEY);
     } catch {
       return null;
     }
   }
 
   public setToken(token: string): void {
+    this.memoryToken = token;
     try {
-      localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(TOKEN_KEY, token);
     } catch {
       // storage unavailable
     }
   }
 
   public clearToken(): void {
+    this.memoryToken = null;
     try {
+      sessionStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_KEY);
     } catch {
       // storage unavailable
@@ -57,6 +93,14 @@ class ApiClient {
     options: RequestInit = {},
     retries = 1
   ): Promise<ApiResponse<T>> {
+    if (!this.isRemoteConfigured()) {
+      throw new ApiError(
+        'Remote API is not configured for this preview environment.',
+        0,
+        'API_UNCONFIGURED'
+      );
+    }
+
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const token = this.getToken();
 
@@ -78,6 +122,7 @@ class ApiClient {
       });
 
       clearTimeout(timeoutId);
+      this.offlineUntil = 0;
 
       const contentType = response.headers.get('content-type') || '';
       let data: any = null;
@@ -102,17 +147,21 @@ class ApiClient {
         throw err;
       }
 
-      // Handle network / abort retry for safe GET operations
+      // Trip temporary offline backoff so repeated background polls don't spam network errors
+      this.offlineUntil = Date.now() + OFFLINE_BACKOFF_MS;
+
+      // Handle network / abort retry for safe GET operations only when not already offline
       const isGet = !options.method || options.method.toUpperCase() === 'GET';
-      if (retries > 0 && isGet) {
+      if (retries > 0 && isGet && err?.name === 'AbortError') {
+        this.offlineUntil = 0;
         return this.request<T>(endpoint, options, retries - 1);
       }
 
-      if (err.name === 'AbortError') {
+      if (err?.name === 'AbortError') {
         throw new ApiError('Request timed out. Please check your network connection.', 408);
       }
 
-      throw new ApiError(err.message || 'Unable to communicate with MastroTickets API.', 0);
+      throw new ApiError(err?.message || 'Unable to communicate with MastroTickets API.', 0, 'NETWORK_UNREACHABLE');
     }
   }
 

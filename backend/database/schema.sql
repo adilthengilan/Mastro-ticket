@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `reservations` (
   `discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `discount_code` VARCHAR(64) DEFAULT NULL,
   `total` DECIMAL(10,2) NOT NULL,
-  `currency` VARCHAR(8) NOT NULL DEFAULT 'AED',
+  `currency` VARCHAR(8) NOT NULL DEFAULT 'USD',
   `status` ENUM('active', 'confirmed', 'expired', 'released') NOT NULL DEFAULT 'active',
   `expires_at` DATETIME NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `order_number` VARCHAR(64) NOT NULL,
   `reservation_id` VARCHAR(64) DEFAULT NULL,
   `customer_id` VARCHAR(64) NOT NULL DEFAULT 'guest',
+  `is_guest` TINYINT(1) NOT NULL DEFAULT 1,
+  `claimed_at` DATETIME DEFAULT NULL,
   `customer_name` VARCHAR(255) NOT NULL,
   `customer_email` VARCHAR(255) NOT NULL,
   `customer_phone` VARCHAR(64) NOT NULL,
@@ -153,7 +155,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `discount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `discount_code` VARCHAR(64) DEFAULT NULL,
   `total` DECIMAL(10,2) NOT NULL,
-  `currency` VARCHAR(8) NOT NULL DEFAULT 'AED',
+  `currency` VARCHAR(8) NOT NULL DEFAULT 'USD',
   `status` ENUM('draft', 'pending_payment', 'paid', 'confirmed', 'partially_refunded', 'refunded', 'cancelled', 'payment_failed', 'expired') NOT NULL DEFAULT 'confirmed',
   `payment_id` VARCHAR(128) DEFAULT NULL,
   `stripe_session_id` VARCHAR(128) DEFAULT NULL,
@@ -166,6 +168,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   UNIQUE KEY `idx_orders_order_number` (`order_number`),
   UNIQUE KEY `idx_orders_stripe_session` (`stripe_session_id`),
   UNIQUE KEY `idx_orders_stripe_event` (`stripe_event_id`),
+  KEY `idx_orders_customer_id` (`customer_id`),
   KEY `idx_orders_customer_email` (`customer_email`),
   KEY `idx_orders_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -281,6 +284,24 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
   UNIQUE KEY `idx_admin_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 14. Registered Customers (Optional Auth + Guest Order Claiming)
+CREATE TABLE IF NOT EXISTS `customers` (
+  `id` VARCHAR(64) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `email_verified` TINYINT(1) NOT NULL DEFAULT 0,
+  `password_hash` VARCHAR(255) DEFAULT NULL,
+  `google_sub` VARCHAR(128) DEFAULT NULL,
+  `display_name` VARCHAR(255) NOT NULL,
+  `phone` VARCHAR(64) DEFAULT NULL,
+  `country` VARCHAR(128) DEFAULT 'Hungary',
+  `auth_provider` ENUM('password', 'google') NOT NULL DEFAULT 'password',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_customers_email` (`email`),
+  KEY `idx_customers_google_sub` (`google_sub`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ==============================================================================
@@ -296,32 +317,29 @@ ON DUPLICATE KEY UPDATE `email` = VALUES(`email`);
 
 -- Seed Categories
 INSERT INTO `categories` (`id`, `name`, `slug`, `description`, `badge_color`) VALUES
-('cat-grandstand', 'Covered Grandstands', 'grandstand', 'Shaded circuit seating with views of Turns 1, 5 Hairpin, West Straight & Marina.', '#0B1F3A'),
-('cat-ga', 'General Admission & Hill', 'general_admission', 'Open grass hill seating with panoramic views of Turns 2 to 7 and giant screens.', '#163A63'),
-('cat-vip', 'VIP Hospitality & Paddock Club', 'vip_hospitality', 'Gourmet dining, open bar, pit lane walks, and superyacht viewing terraces.', '#123B67'),
-('cat-bundle', 'Weekend 3-Day Bundles', 'weekend_bundle', 'All-inclusive weekend passes with Yasalam concerts & theme parks access.', '#15803D'),
-('cat-concert', 'Yasalam After-Race Concerts', 'concert', 'Etihad Park Golden Circle upgrades and multi-night festival passes.', '#B45309')
+('cat-grandstand', 'Covered Grandstands', 'grandstand', 'Shaded Hungaroring seating with views of the Main Straight, Turn 1 & final chicane.', '#0B1F3A'),
+('cat-ga', 'General Admission & Hillside', 'general_admission', 'Open hillside viewing around the natural amphitheatre of the Hungaroring with giant screens.', '#163A63'),
+('cat-vip', 'VIP Hospitality & Paddock Club', 'vip_hospitality', 'Gourmet dining, open bar, pit lane walks, and panoramic Hungaroring viewing terraces.', '#123B67'),
+('cat-bundle', 'Weekend 3-Day Bundles', 'weekend_bundle', 'All-inclusive 3-day Budapest race weekend passes with F1 Fanzone & entertainment access.', '#15803D'),
+('cat-concert', 'After-Race Concerts', 'concert', 'Budapest post-race live concert passes and Golden Circle front-stage upgrades.', '#B45309')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 -- Seed Events
 INSERT INTO `events` (`id`, `slug`, `name`, `official_title`, `circuit`, `location`, `country`, `country_code`, `flag`, `dates`, `start_date`, `end_date`, `round`, `season`, `timezone`, `banner`, `description`, `status`, `starting_price`, `featured`, `lap_distance`, `number_of_laps`, `race_distance`, `lap_record_time`, `lap_record_driver`, `lap_record_year`) VALUES
-('abu-dhabi-gp-2026', 'abu-dhabi-grand-prix-2026', 'Formula 1 Etihad Airways Abu Dhabi Grand Prix 2026', 'FORMULA 1 ETIHAD AIRWAYS ABU DHABI GRAND PRIX 2026', 'Yas Marina Circuit', 'Yas Island, Abu Dhabi', 'United Arab Emirates', 'AE', '🇦🇪', 'December 04 – 06, 2026', '2026-12-04', '2026-12-06', 24, 2026', 'GST (UTC+4)', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1600&q=85', 'The spectacular twilight Formula 1 season finale! Watch the championship climax under the desert sunset as daylight transitions seamlessly to over 4,700 floodlights illuminating the marina, superyachts, and the iconic W Abu Dhabi hotel. Every 3-day ticket includes complimentary access to the world-renowned Yasalam After-Race Concerts at Etihad Park and free admission to Yas Island theme parks.', 'published', 1032.00, 1, '5.281 km', 58, '306.183 km', '1:26.103', 'Max Verstappen', 2021),
-('hungarian-gp-2026', 'hungarian-grand-prix-2026', 'Formula 1 Hungarian Grand Prix 2026', 'FORMULA 1 MAGYAR NAGYDÍJ 2026', 'Hungaroring', 'Budapest', 'Hungary', 'HU', '🇭🇺', 'July 24 – 26, 2026', '2026-07-24', '2026-07-26', 13, 2026', 'CEST (UTC+2)', 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1600&q=80', 'Experience summer racing outside Budapest with historic tight corners and vibrant trackside nightlife.', 'published', 575.00, 0, '4.381 km', 70, '306.630 km', '1:16.627', 'Lewis Hamilton', 2020),
-('monaco-gp-2026', 'monaco-grand-prix-2026', 'Formula 1 Grand Prix de Monaco 2026', 'FORMULA 1 GRAND PRIX DE MONACO 2026', 'Circuit de Monaco', 'Monte Carlo', 'Monaco', 'MC', '🇲🇨', 'May 21 – 24, 2026', '2026-05-21', '2026-05-24', 8, 2026', 'CEST (UTC+2)', 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1600&q=80', 'The historic street circuit of the Principality of Monaco.', 'published', 1508.00, 0, '3.337 km', 78, '260.286 km', '1:12.909', 'Lewis Hamilton', 2021)
+('hungarian-gp-2026', 'hungarian-grand-prix-2026', 'Formula 1 Hungarian Grand Prix 2026', 'FORMULA 1 MAGYAR NAGYDÍJ 2026', 'Hungaroring', 'Budapest, Hungary', 'Hungary', 'HU', '🇭🇺', 'July 24 – 26, 2026', '2026-07-24', '2026-07-26', 13, 2026, 'CEST (UTC+2)', 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1600&q=80', 'Experience summer Formula 1 racing at the iconic Hungaroring in Budapest, Hungary with historic tight corners, covered grandstands, and vibrant race weekend hospitality.', 'published', 575.00, 1, '4.381 km', 70, '306.630 km', '1:16.627', 'Lewis Hamilton', 2020),
+('monaco-gp-2026', 'monaco-grand-prix-2026', 'Formula 1 Grand Prix de Monaco 2026', 'FORMULA 1 GRAND PRIX DE MONACO 2026', 'Circuit de Monaco', 'Monte Carlo', 'Monaco', 'MC', '🇲🇨', 'May 21 – 24, 2026', '2026-05-21', '2026-05-24', 8, 2026, 'CEST (UTC+2)', 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1600&q=80', 'The historic street circuit of the Principality of Monaco.', 'published', 1508.00, 0, '3.337 km', 78, '260.286 km', '1:12.909', 'Lewis Hamilton', 2021)
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
--- Seed Ticket Types (Prices in AED)
+-- Seed Ticket Types (Hungaroring, Budapest)
 INSERT INTO `ticket_types` (`id`, `event_id`, `category_slug`, `race_day`, `name`, `section`, `description`, `price`, `original_price`, `fee`, `capacity`, `available_quantity`, `features_json`, `is_assigned_seating`, `delivery_type`, `status`, `max_per_order`, `image_url`) VALUES
-('t-abu-main-wknd', 'abu-dhabi-gp-2026', 'grandstand', 'Weekend Pass', 'Main Grandstand (Covered)', 'Start/Finish Straight · Opposite F1 Team Garages', 'The prime vantage point at Yas Marina Circuit. Direct frontal view of the starting grid, team pit boxes, and podium ceremony.', 2342.00, 2580.00, 138.00, 4500, 142, '["3-Day admission (Fri, Sat & Sun)","Direct view of start/finish grid & podium","Overlooking team pit garages & pit stops","Numbered allocated covered seating","Access to Thursday Public Pit Lane Walk","Includes access to all 4 Yasalam After-Race Concerts","Complimentary Yas Island theme park access"]', 1, 'instant_eticket', 'available', 6, 'https://alpinef1-assets.dropt.app/Abu_Dhabi_GP_2025_Race_5f98d7412c.png'),
-('t-abu-north-wknd', 'abu-dhabi-gp-2026', 'grandstand', 'Weekend Pass', 'North Grandstand (Covered)', 'Turn 5 Hairpin & Long Straight Entrance', 'Situated at the famous Turn 5 hairpin leading onto the longest straight in Formula 1.', 1905.00, 2100.00, 119.00, 5200, 88, '["3-Day admission (Fri, Sat & Sun)","Panoramic Turn 5 hairpin overtaking view","Overlooks entrance to 1.2km main straight","Covered shaded seating with big screens","Access to all 4 Yasalam After-Race Concerts","Free Yas Island theme park passes included"]', 1, 'instant_eticket', 'available', 6, 'https://www.timeoutabudhabi.com/cloud/timeoutabudhabi/2024/06/25/Abu-Dhabi-GP.jpg'),
-('t-abu-west-wknd', 'abu-dhabi-gp-2026', 'grandstand', 'Weekend Pass', 'West Grandstand (Covered)', 'Turn 6 & 7 Heavy Braking Chicane', 'Positioned at the end of the 1.2km longest straight where F1 cars brake fiercely from 335 km/h.', 2024.00, NULL, 127.00, 4800, 64, '["3-Day admission (Fri, Sat & Sun)","Prime overtaking and out-braking action zone","Close view of chicane and Turn 8 acceleration","Direct walking distance to F1 Fanzone","Access to all 4 Yasalam After-Race Concerts","Includes Yas Island theme park access"]', 1, 'instant_eticket', 'low_inventory', 6, 'https://i0.wp.com/rumemagazine.com/wp-content/uploads/2025/05/Etihad-Park.webp'),
-('t-abu-marina-wknd', 'abu-dhabi-gp-2026', 'grandstand', 'Weekend Pass', 'Marina Grandstand (Covered)', 'Turns 9 & 10 · Overlooking Yas Marina Superyachts', 'Perched directly above the support pit lane and Turns 9 & 10, overlooking illuminated multi-million dollar luxury yachts.', 2104.00, 2300.00, 138.00, 3900, 42, '["3-Day admission (Fri, Sat & Sun)","Spectacular views over Yas Marina & yachts","Overlooks support pits and marina chicane","Direct proximity to Yas Marina promenade dining","Access to all 4 Yasalam After-Race Concerts","Includes Yas Island theme park pass"]', 1, 'instant_eticket', 'low_inventory', 6, 'https://www.digitalstudiome.com/cloud/2021/08/11/sVVDjrSN-Jamiroquai-crowd.jpg'),
-('t-abu-hill-wknd', 'abu-dhabi-gp-2026', 'general_admission', 'Weekend Pass', 'Abu Dhabi Hill (General Admission)', 'Open-Air Elevated Grass Banks (Turns 2 to 7)', 'An open-air grass bank offering relaxed viewing with giant LED screens and festival food stalls.', 1032.00, NULL, 75.00, 8000, 210, '["3-Day general admission (Fri, Sat & Sun)","Panoramic elevated views of sector 1 & 2","Giant video screens for live track commentary","Access to all 4 Yasalam After-Race Concerts","Theme park access included with 3-day pass"]', 0, 'instant_eticket', 'available', 8, 'https://alpinef1-assets.dropt.app/Abu_Dhabi_GP_2025_Race_5f98d7412c.png')
+('t-hun-supergold-wknd', 'hungarian-gp-2026', 'grandstand', 'Weekend Pass', 'Super Gold Grandstand (Covered)', 'Main Start/Finish Straight · Opposite F1 Team Garages', 'The prime covered vantage point at the Hungaroring in Budapest with direct views of the starting grid, pit stops, and podium ceremony.', 2150.00, 2380.00, 120.00, 4500, 142, '["3-Day admission (Fri, Sat & Sun)","Direct view of start/finish grid & podium","Overlooking team pit garages & pit stops","Covered shaded grandstand seating","Access to Hungaroring F1 Fanzone"]', 1, 'instant_eticket', 'available', 6, 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80'),
+('t-hun-gold4-wknd', 'hungarian-gp-2026', 'grandstand', 'Weekend Pass', 'Gold 4 Grandstand', 'Turn 1 Hairpin & Overtaking Zone', 'Positioned right at the iconic Turn 1 heavy braking zone at the end of the Hungaroring main straight.', 1680.00, 1850.00, 95.00, 5200, 88, '["3-Day admission (Fri, Sat & Sun)","Prime Turn 1 overtaking & braking view","Giant LED screen opposite grandstand","Access to Hungaroring F1 Fanzone"]', 1, 'instant_eticket', 'available', 6, 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80'),
+('t-hun-ga-wknd', 'hungarian-gp-2026', 'general_admission', 'Weekend Pass', 'General Admission (Natural Amphitheatre)', 'Elevated Hillside Viewing Areas', 'Open-air hillside viewing around the natural amphitheatre of the Hungaroring with giant screens and fan zone access.', 575.00, NULL, 45.00, 8000, 210, '["3-Day general admission (Fri, Sat & Sun)","Panoramic views across multiple corners","Giant video screens for live track commentary","Access to Hungaroring F1 Fanzone"]', 0, 'instant_eticket', 'available', 8, 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80')
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 -- Seed Discounts
 INSERT INTO `discounts` (`id`, `code`, `discount_percent`, `discount_amount`, `min_spend`, `max_usage`, `used_count`, `valid_until`, `active`) VALUES
-('disc-1', 'ABUDHABI2026', 10, NULL, 900.00, 1000, 0, '2026-12-06', 1),
-('disc-2', 'YASISLAND15', 15, NULL, 1500.00, 500, 0, '2026-12-01', 1),
-('disc-3', 'VIP400', NULL, 400.00, 3000.00, 200, 0, '2026-12-06', 1)
+('disc-1', 'BUDAPEST2026', 10, NULL, 900.00, 1000, 0, '2026-07-26', 1),
+('disc-2', 'HUNGARORING15', 15, NULL, 1500.00, 500, 0, '2026-07-20', 1),
+('disc-3', 'VIP400', NULL, 400.00, 3000.00, 200, 0, '2026-07-26', 1)
 ON DUPLICATE KEY UPDATE `code` = VALUES(`code`);

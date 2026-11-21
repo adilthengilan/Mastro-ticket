@@ -3,7 +3,12 @@ import { TicketType } from '../types';
 import { TicketVerificationResponse } from '../types/api';
 
 export const ticketsService = {
-  async getTickets(params?: { eventId?: string; category?: string; raceDay?: string }): Promise<TicketType[]> {
+  async getTickets(params?: {
+    eventId?: string;
+    category?: string;
+    raceDay?: string;
+    minQuantity?: number;
+  }): Promise<TicketType[]> {
     const res = await apiClient.get<TicketType[]>('/tickets', params);
     return res.data;
   },

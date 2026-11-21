@@ -1,4 +1,4 @@
-export type CurrencyCode = 'USD' | 'AED' | 'EUR';
+export type CurrencyCode = 'USD';
 
 export interface GrandPrixEvent {
   id: string;
@@ -224,7 +224,25 @@ export interface Order {
   cardLast4?: string;
   createdAt: string;
   confirmedAt?: string;
+  isGuestOrder?: boolean;
+  claimedAt?: string;
+  claimedByUid?: string;
   tickets: IssuedTicket[];
+}
+
+export interface GuestOrderRef {
+  orderId: string;
+  orderNumber: string;
+  eventName: string;
+  createdAt: string;
+}
+
+export interface LivePurchaseFeedItem {
+  id: string;
+  anonymizedName: string;
+  itemLabel: string;
+  purchasedAt: string;
+  isDemo?: boolean;
 }
 
 export interface DiscountCode {
@@ -283,5 +301,8 @@ export interface UserProfile {
   phone?: string;
   country?: string;
   avatarUrl?: string;
+  isAuthenticated?: boolean;
+  emailVerified?: boolean;
+  authProvider?: 'guest' | 'password' | 'google';
 }
 
