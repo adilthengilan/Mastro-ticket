@@ -1,6 +1,4 @@
-import { apiClient } from './apiClient';
 import { LivePurchaseFeedItem, Order } from '../types';
-import { PublicRecentPurchase } from '../types/api';
 
 /**
  * Strictly anonymizes full customer names into "FirstName L." format.
@@ -65,23 +63,6 @@ export function buildFeedFromCompletedOrders(orders: Order[]): LivePurchaseFeedI
 
 export const purchaseFeedService = {
   async fetchPublicRecentPurchases(): Promise<LivePurchaseFeedItem[]> {
-    if (!apiClient.isRemoteConfigured()) {
-      return [];
-    }
-    try {
-      const res = await apiClient.get<PublicRecentPurchase[]>('/public/recent-purchases');
-      if (Array.isArray(res.data)) {
-        return res.data.map((item) => ({
-          id: item.id,
-          anonymizedName: item.anonymizedName,
-          itemLabel: item.itemLabel,
-          purchasedAt: item.purchasedAt,
-          isDemo: false,
-        }));
-      }
-      return [];
-    } catch {
-      return [];
-    }
+    return [];
   },
 };

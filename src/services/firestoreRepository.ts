@@ -123,16 +123,32 @@ export async function fetchCollectionOnce<T>(collectionName: string): Promise<T[
   }
 }
 
-export async function fetchUserProfileDoc(uid: string): Promise<UserProfile | null> {
-  if (!uid || uid === 'guest') return null;
+export interface UserProfileFetchResult {
+  profile: UserProfile | null;
+  permissionDenied: boolean;
+}
+
+export async function fetchUserProfileStatus(uid: string): Promise<UserProfileFetchResult> {
+  if (!uid || uid === 'guest') return { profile: null, permissionDenied: false };
   try {
     const snap = await getDoc(doc(db, COLLECTIONS.USERS, uid));
-    if (!snap.exists()) return null;
-    return snap.data() as UserProfile;
+    if (!snap.exists()) return { profile: null, permissionDenied: false };
+    return { profile: snap.data() as UserProfile, permissionDenied: false };
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn(
+        `Firestore rules notice (get users/${uid}): Publish firestore.rules to project mastro-tickets to enable cloud profile sync.`
+      );
+      return { profile: null, permissionDenied: true };
+    }
     console.warn('Unable to fetch user profile doc:', error);
-    return null;
+    return { profile: null, permissionDenied: false };
   }
+}
+
+export async function fetchUserProfileDoc(uid: string): Promise<UserProfile | null> {
+  const { profile } = await fetchUserProfileStatus(uid);
+  return profile;
 }
 
 export async function checkIsAdminDoc(uid: string): Promise<boolean> {
@@ -157,8 +173,12 @@ export async function saveDocument<T extends { id: string }>(
   }
 }
 
-export async function saveUserProfileDoc(profile: UserProfile): Promise<void> {
-  if (!profile.uid || profile.uid === 'guest') return;
+export async function saveUserProfileDoc(
+  profile: UserProfile
+): Promise<{ saved: boolean; permissionDenied?: boolean }> {
+  if (!profile.uid || profile.uid === 'guest' || !profile.email) {
+    return { saved: false };
+  }
   const path = `${COLLECTIONS.USERS}/${profile.uid}`;
   try {
     await setDoc(
@@ -166,7 +186,7 @@ export async function saveUserProfileDoc(profile: UserProfile): Promise<void> {
       sanitizeForFirestore({
         uid: profile.uid,
         email: profile.email,
-        displayName: profile.displayName,
+        displayName: profile.displayName || profile.email.split('@')[0] || 'Mastro Member',
         phone: profile.phone || '',
         country: profile.country || 'Hungary',
         role: profile.role === 'admin' ? 'admin' : 'customer',
@@ -177,7 +197,14 @@ export async function saveUserProfileDoc(profile: UserProfile): Promise<void> {
       }),
       { merge: true }
     );
+    return { saved: true };
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      console.warn(
+        `Firestore rules notice (write ${path}): Publish firestore.rules to project mastro-tickets to enable cloud profile writes.`
+      );
+      return { saved: false, permissionDenied: true };
+    }
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
@@ -338,7 +365,7 @@ export async function reserveTicketsTransaction(params: {
     return { success: true, ...result };
   } catch (error) {
     if (isPermissionDeniedError(error)) {
-      console.error('Firestore Error:', JSON.stringify(formatFirestoreError(error, OperationType.WRITE, reservationPath)));
+      console.warn('Firestore rules notice (reserve):', JSON.stringify(formatFirestoreError(error, OperationType.WRITE, reservationPath)));
       return {
         success: false,
         code: 'PERMISSION_DENIED',
@@ -424,7 +451,7 @@ export async function releaseReservationTransaction(
       return true;
     });
   } catch (error) {
-    console.error('Failed to release Firestore reservation:', error);
+    console.warn('Firestore reservation release notice:', error);
     return false;
   }
 }

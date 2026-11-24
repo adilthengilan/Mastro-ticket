@@ -17,11 +17,6 @@ import {
   BookingReservation,
   GuestOrderRef
 } from '../types';
-import { authService } from './authService';
-import { checkoutService } from './checkoutService';
-import { eventsService } from './eventsService';
-import { ticketsService } from './ticketsService';
-import { apiClient, ApiError } from './apiClient';
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -41,7 +36,7 @@ import {
   COLLECTIONS,
   subscribeToCollection,
   fetchCollectionOnce,
-  fetchUserProfileDoc,
+  fetchUserProfileStatus,
   checkIsAdminDoc,
   saveEventDoc,
   saveTicketDoc,
@@ -97,7 +92,7 @@ export interface ActiveReservationState {
   eventId: string;
   expiresAt: string;
   items: CartItem[];
-  source: 'remote' | 'firestore' | 'local';
+  source: 'firestore' | 'local';
   stockDeductedLocally: boolean;
 }
 
@@ -390,7 +385,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? 'google'
         : 'password';
 
-      const existingDoc = await fetchUserProfileDoc(fbUser.uid);
+      const { profile: existingDoc, permissionDenied } = await fetchUserProfileStatus(fbUser.uid);
       const syncedProfile: UserProfile = {
         uid: fbUser.uid,
         email: existingDoc?.email || fbUser.email || '',
@@ -405,10 +400,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
       setCurrentUser(syncedProfile);
 
-      if (!existingDoc && fbUser.email && syncedUserProfileUidRef.current !== fbUser.uid) {
+      if (permissionDenied) {
+        setFirestoreSyncError(
+          'Firestore profile sync blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+        );
+      } else if (!existingDoc && fbUser.email && syncedUserProfileUidRef.current !== fbUser.uid) {
         syncedUserProfileUidRef.current = fbUser.uid;
         persistFireAndForget(
-          saveUserProfileDoc({ ...syncedProfile, role: 'customer' }),
+          saveUserProfileDoc(syncedProfile).then((res) => {
+            if (res.permissionDenied) {
+              setFirestoreSyncError(
+                'Firestore profile write blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+              );
+            }
+          }),
           'createUserProfile'
         );
       }
@@ -508,33 +513,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubs.forEach((u) => u());
     };
   }, [firebaseUid, isFirebaseAdmin]);
-
-  // Hydrate live catalog from PHP REST API when configured and reachable
-  useEffect(() => {
-    if (!apiClient.isRemoteConfigured()) return;
-    let active = true;
-    const syncCatalog = async () => {
-      try {
-        const [remoteEvents, remoteTickets] = await Promise.all([
-          eventsService.getEvents().catch(() => null),
-          ticketsService.getTickets().catch(() => null),
-        ]);
-        if (!active) return;
-        if (Array.isArray(remoteEvents)) {
-          setEvents(remoteEvents);
-        }
-        if (Array.isArray(remoteTickets)) {
-          setTickets(remoteTickets);
-        }
-      } catch {
-        // Keep Firestore state when remote API is not yet reachable
-      }
-    };
-    syncCatalog();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const saved = sessionStorage.getItem(STORAGE_KEYS.USER);
@@ -842,49 +820,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return expiredActive.length;
   };
 
-  // Refresh live ticket inventory from backend API or Firestore
+  // Refresh live ticket inventory from Firestore
   const refreshLiveInventory = async (params?: {
     eventId?: string;
     raceDay?: string;
     minQuantity?: number;
   }): Promise<TicketType[]> => {
     cleanupExpiredReservations();
-    if (apiClient.isRemoteConfigured()) {
-      setIsInventoryLoading(true);
-      try {
-        const remoteTickets = await ticketsService.getTickets({
-          eventId: params?.eventId,
-          raceDay: params?.raceDay,
-          minQuantity: params?.minQuantity,
-        });
-
-        if (Array.isArray(remoteTickets)) {
-          setTickets((prev) => {
-            if (params?.eventId && !params?.raceDay && !params?.minQuantity) {
-              const others = prev.filter((t) => t.eventId !== params.eventId);
-              return [...others, ...remoteTickets];
-            }
-            if (!params?.eventId && !params?.raceDay && !params?.minQuantity) {
-              return remoteTickets;
-            }
-            const byId = new Map(remoteTickets.map((t) => [t.id, t]));
-            const updated = prev.map((t) => byId.get(t.id) || t);
-            remoteTickets.forEach((rt) => {
-              if (!prev.some((t) => t.id === rt.id)) {
-                updated.push(rt);
-              }
-            });
-            return updated;
-          });
-          return remoteTickets;
-        }
-      } catch {
-        // Fall through to Firestore live fetch
-      } finally {
-        setIsInventoryLoading(false);
-      }
-    }
-
     setIsInventoryLoading(true);
     try {
       const freshTickets = await fetchCollectionOnce<TicketType>(COLLECTIONS.TICKETS);
@@ -919,16 +861,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Clear immediately so concurrent calls cannot restore stock twice
     setActiveReservation(null);
     setReservationTimeRemaining(600);
-
-    if (currentHold.source === 'remote') {
-      try {
-        await checkoutService.releaseReservation(currentHold.reservationId, reason);
-      } catch {
-        // Backend release will auto-expire if offline
-      }
-      await refreshLiveInventory({ eventId: currentHold.eventId });
-      return;
-    }
 
     if (currentHold.source === 'firestore') {
       const statusReason = reason === 'expired' ? 'expired' : 'released';
@@ -1099,60 +1031,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const ticketItems = targetItems.filter((i) => !i.isAddon);
-    if (ticketItems.length > 0 && apiClient.isRemoteConfigured()) {
-      try {
-        const apiRes = await checkoutService.createReservation({
-          eventId,
-          items: ticketItems.map((i) => ({
-            ticketTypeId: i.ticketTypeId,
-            quantity: i.quantity,
-            seatDetails: i.seatDetails,
-          })),
-          customerEmail: currentUser.email || undefined,
-          previousReservationId: previousSource === 'remote' ? previousReservationId : undefined,
-          idempotencyKey,
-        });
-
-        const nextHold: ActiveReservationState = {
-          reservationId: apiRes.reservationId,
-          reservationReference: apiRes.reservationReference,
-          eventId,
-          expiresAt: apiRes.expiresAt,
-          items: [...targetItems],
-          source: 'remote',
-          stockDeductedLocally: false,
-        };
-        setActiveReservation(nextHold);
-        setReservationExpiredNotice(null);
-        setReservationTimeRemaining(computeRemainingSeconds(apiRes.expiresAt));
-
-        if (Array.isArray(apiRes.items)) {
-          setTickets((prev) =>
-            prev.map((t) => {
-              const held = apiRes.items.find((ri) => ri.ticketTypeId === t.id);
-              if (!held || typeof held.availableAfterHold !== 'number') return t;
-              const nextQty = Math.max(0, held.availableAfterHold);
-              return {
-                ...t,
-                availableQuantity: nextQty,
-                status: nextQty === 0 ? 'sold_out' : nextQty < 30 ? 'low_inventory' : 'available',
-              };
-            })
-          );
-        }
-
-        return { success: true, reservation: nextHold };
-      } catch (err: any) {
-        if (err instanceof ApiError && (err.statusCode === 409 || err.statusCode === 422 || err.statusCode === 400)) {
-          await refreshLiveInventory({ eventId });
-          return {
-            success: false,
-            code: err.errorCode || (err.statusCode === 409 ? 'INSUFFICIENT_INVENTORY' : 'VALIDATION_FAILED'),
-            error: err.message,
-          };
-        }
-      }
-    }
 
     // Atomic Firestore inventory reservation transaction (prevents simultaneous overselling)
     if (ticketItems.length > 0) {
@@ -1644,8 +1522,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         await refreshLiveInventory();
         throw err;
       }
-      console.error('Firestore order persistence warning:', errMsg);
-      setFirestoreSyncError('Order saved locally; deploy firestore.rules to mastro-tickets to enable cloud sync.');
+      console.warn('Firestore order persistence notice:', errMsg);
+      setFirestoreSyncError('Order saved locally; publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules to enable cloud sync.');
     }
 
     if (orderData.idempotencyKey) {
@@ -2226,7 +2104,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Non-fatal if displayName update fails
       }
       persistFireAndForget(
-        saveUserProfileDoc({ ...updatedProfile, role: isFirebaseAdmin ? 'admin' : 'customer' }),
+        saveUserProfileDoc({ ...updatedProfile, role: isFirebaseAdmin ? 'admin' : 'customer' }).then((res) => {
+          if (res.permissionDenied) {
+            setFirestoreSyncError(
+              'Firestore profile write blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+            );
+          }
+        }),
         'updateUserProfile'
       );
     }
@@ -2281,7 +2165,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
       setCurrentUser(newProfile);
       syncedUserProfileUidRef.current = fbUser.uid;
-      persistFireAndForget(saveUserProfileDoc(newProfile), `registerProfile:${fbUser.uid}`);
+      persistFireAndForget(
+        saveUserProfileDoc(newProfile).then((res) => {
+          if (res.permissionDenied) {
+            setFirestoreSyncError(
+              'Firestore profile write blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+            );
+          }
+        }),
+        `registerProfile:${fbUser.uid}`
+      );
 
       return {
         success: true,
@@ -2317,7 +2210,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         (await checkIsAdminDoc(fbUser.uid));
       setIsFirebaseAdmin(hasAdminRole);
 
-      const existingDoc = await fetchUserProfileDoc(fbUser.uid);
+      const { profile: existingDoc } = await fetchUserProfileStatus(fbUser.uid);
       const syncedProfile: UserProfile = {
         uid: fbUser.uid,
         email: existingDoc?.email || fbUser.email || cleanEmail,
@@ -2410,7 +2303,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         (await checkIsAdminDoc(fbUser.uid));
       setIsFirebaseAdmin(hasAdminRole);
 
-      const existingDoc = await fetchUserProfileDoc(fbUser.uid);
+      const { profile: existingDoc, permissionDenied } = await fetchUserProfileStatus(fbUser.uid);
       const syncedProfile: UserProfile = {
         uid: fbUser.uid,
         email: existingDoc?.email || fbUser.email || '',
@@ -2425,10 +2318,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
       setCurrentUser(syncedProfile);
 
-      if (!existingDoc && fbUser.email && syncedUserProfileUidRef.current !== fbUser.uid) {
+      if (permissionDenied) {
+        setFirestoreSyncError(
+          'Firestore profile sync blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+        );
+      } else if (!existingDoc && fbUser.email && syncedUserProfileUidRef.current !== fbUser.uid) {
         syncedUserProfileUidRef.current = fbUser.uid;
         persistFireAndForget(
-          saveUserProfileDoc({ ...syncedProfile, role: 'customer' }),
+          saveUserProfileDoc(syncedProfile).then((res) => {
+            if (res.permissionDenied) {
+              setFirestoreSyncError(
+                'Firestore profile write blocked: Publish firestore.rules in Firebase Console → mastro-tickets → Firestore Database → Rules.'
+              );
+            }
+          }),
           `googleProfile:${fbUser.uid}`
         );
       }
@@ -2509,7 +2412,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const logoutUser = () => {
-    authService.logout();
     void signOut(auth).catch(() => {});
     setCurrentUser(DEFAULT_USER);
     setLastClaimedNotice(null);

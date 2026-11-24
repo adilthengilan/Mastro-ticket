@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../services/store';
-import { checkoutService } from '../services/checkoutService';
-import { ApiError } from '../services/apiClient';
+import { releaseReservationTransaction } from '../services/firestoreRepository';
 import {
   ShieldCheck,
   CreditCard,
@@ -82,7 +81,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
       const cancelledResId = params.get('reservation_id');
       const handleCancelCleanup = async () => {
         if (cancelledResId) {
-          await checkoutService.releaseReservation(cancelledResId, 'payment_cancelled').catch(() => {});
+          await releaseReservationTransaction(cancelledResId, 'released').catch(() => {});
         }
         await releaseActiveReservation('payment_cancelled');
         await refreshLiveInventory({ eventId: cart[0]?.eventId });
@@ -155,8 +154,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
         return;
       }
 
-      const confirmedReservation = reservationResult.reservation;
-
       // Populate ticket holder records from primary customer details
       const attendees = Array.from({ length: Math.max(1, totalTicketCount) }, () => ({
         fullName: customerName.trim() || 'Ticket Holder',
@@ -164,46 +161,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ navigate, onOrderCom
         ticketId: cart[0]?.ticketTypeId || 'tkt',
       }));
 
-      // 2. Attempt authoritative Stripe Checkout Session on PHP Backend (reusing active reservationId)
-      try {
-        const session = await checkoutService.createSession({
-          eventId,
-          items: cart,
-          customerEmail,
-          customerName,
-          customerPhone,
-          discountCode: appliedDiscount?.code,
-          reservationId: confirmedReservation.source === 'remote' ? confirmedReservation.reservationId : undefined,
-          idempotencyKey: attemptKey,
-        });
-
-        if (session && session.checkoutUrl) {
-          window.location.href = session.checkoutUrl;
-          return;
-        }
-      } catch (backendError: any) {
-        // Real stock conflict or validation error from backend: release hold, refresh inventory, STOP checkout!
-        if (
-          backendError instanceof ApiError &&
-          (backendError.statusCode === 409 || backendError.statusCode === 422 || backendError.statusCode === 400)
-        ) {
-          await releaseActiveReservation('payment_failed');
-          await refreshLiveInventory({ eventId });
-          setIsProcessing(false);
-          setErrorMsg(
-            backendError.message ||
-              'Inventory changed before payment could be authorized. Available options have been refreshed.'
-          );
-          return;
-        }
-        // Network/offline API fallback for local preview mode
-        console.info(
-          '[MastroTickets] Remote API checkout session offline, proceeding with verified order generation:',
-          backendError
-        );
-      }
-
-      // 3. Authoritative local order generation fallback (preview & dev mode — reuses active hold without double deduction)
+      // 2. Finalize order atomically in Firestore (reusing active reservation hold without double deduction)
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       const order = await createOrder({
